@@ -1,0 +1,19 @@
+[project]
+name = "meeting-platform-backend"
+version = "0.1.0"
+description = "智能会议记录平台 - 后端网关"
+requires-python = ">=3.11"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+plugins = ["pydantic.mypy"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -1,0 +1,42 @@
+version: "3.9"
+
+# 生产环境配置覆盖
+# 使用方式: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    restart: always
+    environment:
+      - APP_ENV=production
+
+  celery-worker:
+    command: celery -A app.workers.celery_app worker --loglevel=warning --concurrency=4
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: build
+    command: nginx -g "daemon off;"
+    restart: always
+
+  postgres:
+    restart: always
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+
+  nginx:
+    restart: always
+
+volumes:
+  pgdata:
+  redisdata:
+  audio_data:
