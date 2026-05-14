@@ -1,0 +1,92 @@
+{
+  "tldr": "本次Q2规划同步会确认了移动端适配延期至v3.1，并制定了权限系统5月25日提测、6月5日前完成所有功能开发的关键里程碑。",
+  "meeting": {
+    "title": "Q2 Planning Sync",
+    "date": "2026-05-11",
+    "time": "14:00",
+    "location": "Room 3",
+    "host": "Zhang Wei",
+    "attendees": ["Li Na", "Wang Qiang", "Zhao Min"],
+    "agenda": ["Sprint review", "Q2 roadmap", "Risk assessment"],
+    "meeting_type": "规划会"
+  },
+  "discussion_points": [
+    {
+      "topic": "Sprint Review",
+      "summary": "团队回顾了本次迭代的交付成果，整体进度符合预期。",
+      "speaker": "Zhang Wei",
+      "key_conclusion": "本次迭代达成所有Sprint目标，遗留2个低优先级bug延至下个迭代处理。",
+      "source_quote": "本次迭代达成所有Sprint目标，遗留2个低优先级bug。",
+      "factual_confidence": 0.95
+    },
+    {
+      "topic": "Q2 Roadmap",
+      "summary": "讨论Q2路线图调整，移动端适配因资源不足需延期。",
+      "speaker": "Li Na",
+      "key_conclusion": "移动端适配正式延期到v3.1，需更新roadmap并同步相关方。",
+      "source_quote": "移动端适配正式延期到v3.1。",
+      "factual_confidence": 0.9
+    }
+  ],
+  "decisions": [
+    {
+      "description": "移动端适配延期至v3.1",
+      "rationale": "当前测试资源集中在权限系统，无法同时支撑两个大版本测试",
+      "responsible": "Li Na",
+      "deadline": "2026-05-15",
+      "source_quote": "移动端适配延期至v3.1。",
+      "factual_confidence": 0.95
+    },
+    {
+      "description": "权限系统5月25日提测",
+      "rationale": "作为Q2最高优先级功能，需预留两周测试和修复缓冲期",
+      "responsible": "Chen Lei",
+      "deadline": "2026-05-25",
+      "source_quote": "权限系统5月25日提测。",
+      "factual_confidence": 0.9
+    }
+  ],
+  "action_items": [
+    {
+      "task": "更新roadmap",
+      "assignee": "Li Na",
+      "due": "2026-05-14",
+      "priority": "P2",
+      "source_quote": "更新roadmap并同步相关方。"
+    },
+    {
+      "task": "安排权限系统测试资源",
+      "assignee": "Chen Lei",
+      "due": "2026-05-20",
+      "priority": "P1",
+      "source_quote": "安排权限系统测试资源。"
+    },
+    {
+      "task": "输出移动端设计方案",
+      "assignee": "Zhao Min",
+      "due": "2026-05-13",
+      "priority": "P0",
+      "source_quote": "输出移动端设计方案。"
+    }
+  ],
+  "issues_risks": [
+    {
+      "description": "测试资源紧张，权限系统与移动端适配存在资源竞争",
+      "severity": "高",
+      "mitigation": "已决定移动端延期，优先保障权限系统测试",
+      "source_quote": "测试资源紧张，权限系统与移动端适配存在资源竞争。"
+    },
+    {
+      "description": "6月5日功能开发截止时间偏紧",
+      "severity": "中",
+      "mitigation": "暂无",
+      "source_quote": "6月5日功能开发截止时间偏紧。"
+    }
+  ],
+  "next_meeting": {
+    "date": "2026-05-18",
+    "time": "14:00",
+    "location": "Room 3",
+    "tentative_agenda": "Progress reports"
+  }
+}

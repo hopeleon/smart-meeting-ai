@@ -1,0 +1,39 @@
+{
+  "meeting": {
+    "title": "Q2 Planning Sync",
+    "date": "2026-05-11",
+    "time": "14:00",
+    "location": "Room 3",
+    "host": "Zhang Wei",
+    "attendees": ["Li Na", "Wang Qiang", "Zhao Min"],
+    "agenda": ["Sprint review", "Q2 roadmap"]
+  },
+  "discussion_points": [
+    {
+      "topic": "Sprint Review",
+      "summary": "Team reviewed the sprint deliverables.",
+      "speaker": "Zhang Wei"
+    }
+  ],
+  "decisions": [
+    {
+      "description": "Delay mobile adaptation to v3.1",
+      "responsible": "Li Na",
+      "deadline": "2026-05-15"
+    }
+  ],
+  "action_items": [
+    {
+      "task": "Update roadmap",
+      "assignee": "Li Na",
+      "due": "2026-05-16"
+    }
+  ],
+  "issues_risks": ["Tight testing resources"],
+  "next_meeting": {
+    "date": "2026-05-18",
+    "time": "14:00",
+    "location": "Room 3",
+    "tentative_agenda": "Progress reports"
+  }
+}

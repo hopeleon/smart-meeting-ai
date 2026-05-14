@@ -1,0 +1,20 @@
+# Secrets — API keys MUST be set via environment variables
+CLAUDE.md
+config.json
+*.txt
+!sample_input.txt
+!test2.txt
+!prompts/*.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Output directory (generated summaries)
+output/*
+!output/.gitignore
+
+# IDE
+.vscode/
+.idea/

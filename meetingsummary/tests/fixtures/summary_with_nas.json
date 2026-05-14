@@ -1,0 +1,21 @@
+{
+  "meeting": {
+    "title": "Weekly Standup",
+    "date": "N/A",
+    "time": "TBD",
+    "location": "",
+    "host": "N/A",
+    "attendees": [],
+    "agenda": []
+  },
+  "discussion_points": [],
+  "decisions": [],
+  "action_items": [],
+  "issues_risks": [],
+  "next_meeting": {
+    "date": "TBD",
+    "time": "TBD",
+    "location": "TBD",
+    "tentative_agenda": "TBD"
+  }
+}

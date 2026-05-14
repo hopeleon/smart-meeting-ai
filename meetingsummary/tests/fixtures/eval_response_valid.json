@@ -1,0 +1,46 @@
+{
+  "verdicts": [
+    {
+      "claim_id": "meeting.title",
+      "claim": "会议标题是\"Q2 Planning Sync\"",
+      "verdict": "distorted",
+      "reasoning": "原文标题为'Q2 产品发布计划同步会'，英文翻译与原文不一致"
+    },
+    {
+      "claim_id": "meeting.date",
+      "claim": "会议日期为2026-05-11",
+      "verdict": "consistent",
+      "reasoning": "原文明确记录'时间：2026年5月11日 14:00-15:30'"
+    },
+    {
+      "claim_id": "meeting.host",
+      "claim": "会议由张伟主持",
+      "verdict": "consistent",
+      "reasoning": "原文标注'主持人：张伟'"
+    },
+    {
+      "claim_id": "dp.0",
+      "claim": "[讨论] 产品发布计划：李娜提出v3.0计划6月20日发布（发言人：李娜）",
+      "verdict": "consistent",
+      "reasoning": "原文中李娜明确说明'6月20日发布v3.0版本'"
+    },
+    {
+      "claim_id": "action.0",
+      "claim": "[行动项] 更新roadmap并发送，由李娜执行，截止2026-05-15",
+      "verdict": "consistent",
+      "reasoning": "原文中张伟要求'李娜更新一下roadmap'，李娜回复'周五前更新'"
+    },
+    {
+      "claim_id": "action.1",
+      "claim": "[行动项] 产出移动端设计方案，由陈磊执行，截止2026-05-17",
+      "verdict": "distorted",
+      "reasoning": "原文中移动端设计方案由赵敏负责，而非陈磊。陈磊是测试负责人"
+    },
+    {
+      "claim_id": "issues_risks.0",
+      "claim": "[问题/风险] 预算不足无法增加服务器",
+      "verdict": "hallucination",
+      "reasoning": "原文中完全没有提及预算或服务器相关内容"
+    }
+  ]
+}

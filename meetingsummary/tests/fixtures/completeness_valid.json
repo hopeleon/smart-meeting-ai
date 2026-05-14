@@ -1,0 +1,28 @@
+{
+  "agenda_check": {
+    "total": 3,
+    "covered": 3,
+    "missing": [],
+    "details": [
+      "Sprint review → 讨论要点第1项覆盖",
+      "Q2 roadmap → 讨论要点第2项覆盖",
+      "Risk assessment → 问题与风险章节覆盖"
+    ]
+  },
+  "speaker_check": {
+    "total": 3,
+    "covered": 3,
+    "missing": [],
+    "details": [
+      "Zhang Wei → 主持并参与多项讨论",
+      "Li Na → Q2 Roadmap讨论发言人",
+      "Zhao Min → 未在讨论要点中作为主发言人出现"
+    ]
+  },
+  "section_check": {
+    "sections_present": ["tldr", "meeting", "discussion_points", "decisions", "action_items", "issues_risks", "next_meeting"],
+    "sections_empty": [],
+    "sections_missing": []
+  },
+  "overall_assessment": "摘要覆盖完整，所有议程项和发言人均有体现，各章节内容充实。"
+}
