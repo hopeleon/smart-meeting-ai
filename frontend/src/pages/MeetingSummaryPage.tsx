@@ -12,13 +12,17 @@ import type { TranscriptSegment } from '../types/meeting'
 export default function MeetingSummaryPage() {
   const { meetingId } = useParams<{ meetingId: string }>()
   const navigate = useNavigate()
-  const { currentMeeting, setCurrentMeeting, finalSummary, setFinalSummary } = useMeetingStore()
+  const { currentMeeting, setCurrentMeeting, clearCurrent, finalSummary, setFinalSummary } = useMeetingStore()
   const [transcripts, setTranscripts] = useState<TranscriptSegment[]>([])
   const [showTranscripts, setShowTranscripts] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!meetingId) return
+
+    // 切换会议时，先清空之前的数据
+    clearCurrent()
+    setLoading(true)
 
     Promise.all([
       getMeeting(meetingId),
@@ -30,7 +34,7 @@ export default function MeetingSummaryPage() {
       setTranscripts(transcriptResp.items)
       setLoading(false)
     })
-  }, [meetingId, setCurrentMeeting, setFinalSummary])
+  }, [meetingId, setCurrentMeeting, setFinalSummary, clearCurrent])
 
   if (loading) {
     return <div className="text-center text-gray-500 py-16">加载中...</div>

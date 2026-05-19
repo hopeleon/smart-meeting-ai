@@ -1,0 +1,476 @@
+{
+  "_meta": {
+    "total_duration_sec": 351.74,
+    "num_speakers": 8,
+    "num_segments": 42,
+    "target_duration_sec": 180,
+    "generated_at": "2026-05-18T19:09:45.898918",
+    "timestamp": "20260518_190945",
+    "splicing_method": "random_shuffle",
+    "random_seed": 190945,
+    "speakers": [
+      {
+        "speaker_id": "1202",
+        "speaker_name": "徐云",
+        "num_segments": 9
+      },
+      {
+        "speaker_id": "19",
+        "speaker_name": "陈磊",
+        "num_segments": 4
+      },
+      {
+        "speaker_id": "1047",
+        "speaker_name": "杨明",
+        "num_segments": 3
+      },
+      {
+        "speaker_id": "590",
+        "speaker_name": "高建国",
+        "num_segments": 8
+      },
+      {
+        "speaker_id": "613",
+        "speaker_name": "马永强",
+        "num_segments": 6
+      },
+      {
+        "speaker_id": "725",
+        "speaker_name": "郭娟",
+        "num_segments": 5
+      },
+      {
+        "speaker_id": "721",
+        "speaker_name": "郭霞",
+        "num_segments": 4
+      },
+      {
+        "speaker_id": "1075",
+        "speaker_name": "黄磊",
+        "num_segments": 3
+      }
+    ]
+  },
+  "segments": [
+    {
+      "id": 1,
+      "speaker_id": "613",
+      "speaker_name": "马永强",
+      "start_ms": 0,
+      "end_ms": 6840,
+      "duration_ms": 6840,
+      "text": "如果基站上采用四分支接收分集技术",
+      "audio_file": "5b44796f-c873-4195-b37e-3495ed36c1b8.wav"
+    },
+    {
+      "id": 2,
+      "speaker_id": "721",
+      "speaker_name": "郭霞",
+      "start_ms": 7340,
+      "end_ms": 15140,
+      "duration_ms": 7800,
+      "text": "一九二七年 出任广东教育厅长 期间出任仲恺农工学校",
+      "audio_file": "f6011578-6f80-43fb-b132-2fafb9458c6d.wav"
+    },
+    {
+      "id": 3,
+      "speaker_id": "19",
+      "speaker_name": "陈磊",
+      "start_ms": 15640,
+      "end_ms": 26200,
+      "duration_ms": 10560,
+      "text": "这样即在竞争中取得优势又有利于资产的合理化配置",
+      "audio_file": "8477720f-de04-42b1-a09a-d7dd9cdeec76.wav"
+    },
+    {
+      "id": 4,
+      "speaker_id": "1075",
+      "speaker_name": "黄磊",
+      "start_ms": 26700,
+      "end_ms": 32220,
+      "duration_ms": 5520,
+      "text": "二零零九年获 全国杰出专业技术人才 称号",
+      "audio_file": "a492b41c-db0f-40e4-acee-122cf3a954ca.wav"
+    },
+    {
+      "id": 5,
+      "speaker_id": "1075",
+      "speaker_name": "黄磊",
+      "start_ms": 32720,
+      "end_ms": 40040,
+      "duration_ms": 7320,
+      "text": "十月围城 二千零百零九 狼灾记 二千零百零九",
+      "audio_file": "cf8a9e42-93fb-4db7-b997-784fed6e99f3.wav"
+    },
+    {
+      "id": 6,
+      "speaker_id": "590",
+      "speaker_name": "高建国",
+      "start_ms": 40540,
+      "end_ms": 47980,
+      "duration_ms": 7440,
+      "text": "以乐安 罗田等江西古村落为代表的文化 其布局简洁",
+      "audio_file": "1e38865f-1053-4628-bc3e-9dea0c08010a.wav"
+    },
+    {
+      "id": 7,
+      "speaker_id": "721",
+      "speaker_name": "郭霞",
+      "start_ms": 48480,
+      "end_ms": 56160,
+      "duration_ms": 7680,
+      "text": "推进开发区城市功能改造 加快生态空间修复和城镇空间重塑",
+      "audio_file": "b363a419-0b5f-47f4-a978-60b60bdb264f.wav"
+    },
+    {
+      "id": 8,
+      "speaker_id": "19",
+      "speaker_name": "陈磊",
+      "start_ms": 56660,
+      "end_ms": 69980,
+      "duration_ms": 13320,
+      "text": "一千九百九十一 一千九百八十七 北极的圣诞老人兄弟",
+      "audio_file": "f3b8dfc9-87bc-40c8-9593-f6cdd05cc084.wav"
+    },
+    {
+      "id": 9,
+      "speaker_id": "721",
+      "speaker_name": "郭霞",
+      "start_ms": 70480,
+      "end_ms": 76960,
+      "duration_ms": 6480,
+      "text": "与其他不同 受到轻躁狂影响的人群变得更有生活追求",
+      "audio_file": "e913a75d-44dd-478e-b79a-c67ac495b82f.wav"
+    },
+    {
+      "id": 10,
+      "speaker_id": "613",
+      "speaker_name": "马永强",
+      "start_ms": 77460,
+      "end_ms": 84900,
+      "duration_ms": 7440,
+      "text": "一分大学导读曾称赞堪萨斯大学是州立大学中能提供",
+      "audio_file": "01f31b6a-1aa3-4cf7-a79e-a4500d229a6b.wav"
+    },
+    {
+      "id": 11,
+      "speaker_id": "590",
+      "speaker_name": "高建国",
+      "start_ms": 85400,
+      "end_ms": 91520,
+      "duration_ms": 6120,
+      "text": "他们大胆地谈论灵魂力 而又竭力使它受物质的测验",
+      "audio_file": "899bb953-0430-4037-a449-ae890bdea01f.wav"
+    },
+    {
+      "id": 12,
+      "speaker_id": "721",
+      "speaker_name": "郭霞",
+      "start_ms": 92020,
+      "end_ms": 101380,
+      "duration_ms": 9360,
+      "text": "截至二零零七年底 奇瑞公司拥有员工一万九千三百二十一人",
+      "audio_file": "8c59f7fa-6b3f-44d6-b156-160335b9334c.wav"
+    },
+    {
+      "id": 13,
+      "speaker_id": "1202",
+      "speaker_name": "徐云",
+      "start_ms": 101880,
+      "end_ms": 108600,
+      "duration_ms": 6720,
+      "text": "一九九九年十一月三十日至十二月三日 西雅图",
+      "audio_file": "5726a1bc-e02c-408f-9d49-11dc09c8ae4e.wav"
+    },
+    {
+      "id": 14,
+      "speaker_id": "1202",
+      "speaker_name": "徐云",
+      "start_ms": 109100,
+      "end_ms": 115340,
+      "duration_ms": 6240,
+      "text": "长卿说要经过草海去蛮州寻找灵珠 于是",
+      "audio_file": "bdda1370-600d-49d2-9f9a-d4601d9b1eef.wav"
+    },
+    {
+      "id": 15,
+      "speaker_id": "1047",
+      "speaker_name": "杨明",
+      "start_ms": 115840,
+      "end_ms": 123260,
+      "duration_ms": 7420,
+      "text": "其中十 三十万吨级大型深水泊位三十多个",
+      "audio_file": "62c8cef6-5114-4d3c-8727-a5ce6a5c5760.wav"
+    },
+    {
+      "id": 16,
+      "speaker_id": "590",
+      "speaker_name": "高建国",
+      "start_ms": 123760,
+      "end_ms": 130600,
+      "duration_ms": 6840,
+      "text": "但主要是后现代社会 又称后工业社会 信息社会",
+      "audio_file": "539b5ad6-45a0-471e-ba9d-01deeb32bbcf.wav"
+    },
+    {
+      "id": 17,
+      "speaker_id": "1202",
+      "speaker_name": "徐云",
+      "start_ms": 131100,
+      "end_ms": 138780,
+      "duration_ms": 7680,
+      "text": "神父楼在后偏东 修女楼在后偏西 圣母山在大堂偏东",
+      "audio_file": "5c81e266-6476-48f3-ba0f-22318311d8d5.wav"
+    },
+    {
+      "id": 18,
+      "speaker_id": "1202",
+      "speaker_name": "徐云",
+      "start_ms": 139280,
+      "end_ms": 146720,
+      "duration_ms": 7440,
+      "text": "其抗锈蚀能力大为提高 寿命远远超过老扣件",
+      "audio_file": "c67c7cd5-2f9b-4cad-a14a-453a0810dd83.wav"
+    },
+    {
+      "id": 19,
+      "speaker_id": "19",
+      "speaker_name": "陈磊",
+      "start_ms": 147220,
+      "end_ms": 161140,
+      "duration_ms": 13920,
+      "text": "通过分子机械对遗传基因进行再构筑的方法",
+      "audio_file": "92091b8a-04de-420f-a81b-519a672b2def.wav"
+    },
+    {
+      "id": 20,
+      "speaker_id": "725",
+      "speaker_name": "郭娟",
+      "start_ms": 161640,
+      "end_ms": 167640,
+      "duration_ms": 6000,
+      "text": "岛上土著因而迫迁 部族生活陷入危机",
+      "audio_file": "92d00f48-0c2b-48bf-9569-fc01d086fdbd.wav"
+    },
+    {
+      "id": 21,
+      "speaker_id": "590",
+      "speaker_name": "高建国",
+      "start_ms": 168140,
+      "end_ms": 178340,
+      "duration_ms": 10200,
+      "text": "这说明当时骈文仍有市场 三十年代又是骈文古籍整理出版的繁荣时期",
+      "audio_file": "c6815494-535f-4db9-ac1e-8c057e216e6f.wav"
+    },
+    {
+      "id": 22,
+      "speaker_id": "1047",
+      "speaker_name": "杨明",
+      "start_ms": 178840,
+      "end_ms": 185480,
+      "duration_ms": 6640,
+      "text": "从这首诗上看 至少在当时他身边只有这一个女儿",
+      "audio_file": "35a345ee-9b61-4d5c-a625-b747a9cea07f.wav"
+    },
+    {
+      "id": 23,
+      "speaker_id": "1047",
+      "speaker_name": "杨明",
+      "start_ms": 185980,
+      "end_ms": 190680,
+      "duration_ms": 4700,
+      "text": "走上独立经营舞厅 自食其力的道路",
+      "audio_file": "41d73b3a-5b81-40b2-9331-196e040eff29.wav"
+    },
+    {
+      "id": 24,
+      "speaker_id": "590",
+      "speaker_name": "高建国",
+      "start_ms": 191180,
+      "end_ms": 201140,
+      "duration_ms": 9960,
+      "text": "如果是不锁倍频的 高手们会采用提高外频降低倍频的方法来达到更好的效果",
+      "audio_file": "f35e5d0b-fbca-4a3e-8914-868abb83888c.wav"
+    },
+    {
+      "id": 25,
+      "speaker_id": "725",
+      "speaker_name": "郭娟",
+      "start_ms": 201640,
+      "end_ms": 206200,
+      "duration_ms": 4560,
+      "text": "一九一七年十一月七日 俄历十月二十五日",
+      "audio_file": "86d37972-95f6-4c98-b71c-55766bfafcba.wav"
+    },
+    {
+      "id": 26,
+      "speaker_id": "590",
+      "speaker_name": "高建国",
+      "start_ms": 206700,
+      "end_ms": 219420,
+      "duration_ms": 12720,
+      "text": "其相云何 二十七现前立少物谓是唯识性以有所得故非实住唯识三",
+      "audio_file": "238a5fd5-f4e2-4fd2-ab5c-52e606199db4.wav"
+    },
+    {
+      "id": 27,
+      "speaker_id": "1202",
+      "speaker_name": "徐云",
+      "start_ms": 219920,
+      "end_ms": 228440,
+      "duration_ms": 8520,
+      "text": "有关金属汞的生产很多 例如汞矿的开采与汞的冶炼",
+      "audio_file": "0646d7b5-c6a2-4ad4-abe7-7eb6ec90dc69.wav"
+    },
+    {
+      "id": 28,
+      "speaker_id": "725",
+      "speaker_name": "郭娟",
+      "start_ms": 228940,
+      "end_ms": 234700,
+      "duration_ms": 5760,
+      "text": "十月二十三日后栗田的舰队经过水域",
+      "audio_file": "df7fcbef-60f9-4772-95b2-8ffa538fe474.wav"
+    },
+    {
+      "id": 29,
+      "speaker_id": "1202",
+      "speaker_name": "徐云",
+      "start_ms": 235200,
+      "end_ms": 242640,
+      "duration_ms": 7440,
+      "text": "宇文述甚敬之 委以州务 岁余 迁金州刺史",
+      "audio_file": "fb79ac0f-6109-49c2-aacb-8133c01a065f.wav"
+    },
+    {
+      "id": 30,
+      "speaker_id": "725",
+      "speaker_name": "郭娟",
+      "start_ms": 243140,
+      "end_ms": 249620,
+      "duration_ms": 6480,
+      "text": "此街全长三百八十五米 占地三点三万平方米",
+      "audio_file": "d8f0209d-b18f-4799-a0b6-56c2d9a65c2d.wav"
+    },
+    {
+      "id": 31,
+      "speaker_id": "1202",
+      "speaker_name": "徐云",
+      "start_ms": 250120,
+      "end_ms": 256840,
+      "duration_ms": 6720,
+      "text": "据载东汉建安十三年 二百零八年 曹军追击刘备",
+      "audio_file": "58a3ee74-3683-4752-97c4-c31c96f647bc.wav"
+    },
+    {
+      "id": 32,
+      "speaker_id": "725",
+      "speaker_name": "郭娟",
+      "start_ms": 257340,
+      "end_ms": 263940,
+      "duration_ms": 6600,
+      "text": "还能通过栗子的活血止血效用 促进恶露排除及子宫复原",
+      "audio_file": "f73859a2-7325-49de-8ce9-1490ed5a43bc.wav"
+    },
+    {
+      "id": 33,
+      "speaker_id": "590",
+      "speaker_name": "高建国",
+      "start_ms": 264440,
+      "end_ms": 272120,
+      "duration_ms": 7680,
+      "text": "一九七九年 中国知名歌手 一九七九年 英格兰职业足球员",
+      "audio_file": "3a59fe34-5d1e-4a78-a98a-9629540982c6.wav"
+    },
+    {
+      "id": 34,
+      "speaker_id": "1075",
+      "speaker_name": "黄磊",
+      "start_ms": 272620,
+      "end_ms": 282460,
+      "duration_ms": 9840,
+      "text": "累迁国子博士 大匠卿 馀并如故 寻迁黄门侍郎",
+      "audio_file": "0e5b3c70-63e8-4ce1-b058-d9c2d3467f7d.wav"
+    },
+    {
+      "id": 35,
+      "speaker_id": "19",
+      "speaker_name": "陈磊",
+      "start_ms": 282960,
+      "end_ms": 293040,
+      "duration_ms": 10080,
+      "text": "境内赤斑羚总数不足一千五百只",
+      "audio_file": "8b03748b-504c-4008-88c0-881b7b2c559f.wav"
+    },
+    {
+      "id": 36,
+      "speaker_id": "1202",
+      "speaker_name": "徐云",
+      "start_ms": 293540,
+      "end_ms": 302660,
+      "duration_ms": 9120,
+      "text": "国服售价 三千零百点券或四千八百金币以下是卡牌大师",
+      "audio_file": "3bdd9128-ce42-4866-8241-76b1589fbf7b.wav"
+    },
+    {
+      "id": 37,
+      "speaker_id": "613",
+      "speaker_name": "马永强",
+      "start_ms": 303160,
+      "end_ms": 309160,
+      "duration_ms": 6000,
+      "text": "而 黑暗骑士 中由诺兰塑造的双面人取得了空前的成功",
+      "audio_file": "1688a3dc-e3cb-41c2-880c-4ef514365319.wav"
+    },
+    {
+      "id": 38,
+      "speaker_id": "613",
+      "speaker_name": "马永强",
+      "start_ms": 309660,
+      "end_ms": 316740,
+      "duration_ms": 7080,
+      "text": "简单沉稳的旋律 搭配几许衬垫其后的吉他拨弦",
+      "audio_file": "a4a64eb2-3a38-4f18-830e-a197625bbe4a.wav"
+    },
+    {
+      "id": 39,
+      "speaker_id": "613",
+      "speaker_name": "马永强",
+      "start_ms": 317240,
+      "end_ms": 325640,
+      "duration_ms": 8400,
+      "text": "旅游地产升值潜力巨大随着国家对旅游业战略性支柱产业的明确定位",
+      "audio_file": "12a57c1f-4a0e-435d-a5e0-85785f9bd34e.wav"
+    },
+    {
+      "id": 40,
+      "speaker_id": "1202",
+      "speaker_name": "徐云",
+      "start_ms": 326140,
+      "end_ms": 335380,
+      "duration_ms": 9240,
+      "text": "这连弩有两个基本数据 一是能连发十矢 二是矢长只有八寸",
+      "audio_file": "3c549a62-f4d5-48df-b344-6735722f1507.wav"
+    },
+    {
+      "id": 41,
+      "speaker_id": "590",
+      "speaker_name": "高建国",
+      "start_ms": 335880,
+      "end_ms": 343080,
+      "duration_ms": 7200,
+      "text": "换句话说 道法自然 就是坚执 无为 人法自然",
+      "audio_file": "31ebbdbd-92c4-465c-ae9a-9c2049324283.wav"
+    },
+    {
+      "id": 42,
+      "speaker_id": "613",
+      "speaker_name": "马永强",
+      "start_ms": 343580,
+      "end_ms": 351740,
+      "duration_ms": 8160,
+      "text": "昭德有劳曰昭 出土楚国文献写作卲王 来攻",
+      "audio_file": "18f20e73-9bea-48a5-96dc-1068ae7ed4b9.wav"
+    }
+  ]
+}

@@ -6,13 +6,15 @@ import type { MeetingCreate } from '../types/meeting'
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const { meetings, setMeetings } = useMeetingStore()
+  const { meetings, setMeetings, clearCurrent } = useMeetingStore()
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState<MeetingCreate>({ title: '', description: '' })
 
   useEffect(() => {
+    // 进入首页时清空之前的数据
+    clearCurrent()
     listMeetings().then((res) => setMeetings(res.items))
-  }, [setMeetings])
+  }, [setMeetings, clearCurrent])
 
   const handleCreate = async () => {
     if (!form.title.trim()) return
@@ -21,6 +23,21 @@ export default function HomePage() {
     setShowCreate(false)
     setForm({ title: '', description: '' })
     navigate(`/meeting/${meeting.id}`)
+  }
+
+  const handleCardClick = (meeting: typeof meetings[0]) => {
+    if (meeting.status === 'ended') {
+      navigate(`/meeting/${meeting.id}/summary`)
+    } else {
+      navigate(`/meeting/${meeting.id}`)
+    }
+  }
+
+  const handleDelete = async (e: React.MouseEvent, meetingId: string) => {
+    e.stopPropagation()
+    if (!confirm('确定要删除该会议吗？')) return
+    await import('../api/meetings').then(m => m.deleteMeeting(meetingId))
+    setMeetings(meetings.filter(m => m.id !== meetingId))
   }
 
   const statusLabel: Record<string, string> = {
@@ -87,21 +104,43 @@ export default function HomePage() {
         {meetings.map((meeting) => (
           <div
             key={meeting.id}
-            onClick={() => navigate(`/meeting/${meeting.id}`)}
-            className="glass rounded-xl p-5 cursor-pointer hover:border-primary/50 transition-colors"
+            onClick={() => handleCardClick(meeting)}
+            className={`glass rounded-xl p-5 cursor-pointer transition-colors ${
+              meeting.status === 'ended'
+                ? 'hover:border-green-500/50 opacity-90 hover:opacity-100'
+                : 'hover:border-primary/50'
+            }`}
           >
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg font-semibold">{meeting.title}</h3>
-              <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor[meeting.status]}`}>
-                {statusLabel[meeting.status]}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor[meeting.status]}`}>
+                  {statusLabel[meeting.status]}
+                </span>
+                {meeting.status === 'ended' && (
+                  <button
+                    onClick={(e) => handleDelete(e, meeting.id)}
+                    className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+                    title="删除会议"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
             {meeting.description && (
               <p className="text-sm text-gray-400 mb-2">{meeting.description}</p>
             )}
-            <div className="flex items-center gap-4 text-xs text-gray-500">
-              <span>{meeting.participants.length} 位参与者</span>
-              <span>{new Date(meeting.created_at).toLocaleString('zh-CN')}</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                <span>{meeting.participants.length} 位参与者</span>
+                <span>{new Date(meeting.created_at).toLocaleString('zh-CN')}</span>
+              </div>
+              {meeting.status === 'ended' && (
+                <span className="text-xs text-green-500 font-medium">查看总结 →</span>
+              )}
             </div>
           </div>
         ))}

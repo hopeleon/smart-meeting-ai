@@ -1,64 +1,97 @@
 """
-LLM 总结服务接口层
-================
-当前为 STUB 实现，返回 mock 数据。
-算法团队接入时，修改 _call_llm_model() 方法即可，无需改动上层调用。
+LLM 总结服务
+============
+直接调用 meetingsummary/ 模块（Ollama LLM）生成会议总结。
 
-接入要求：
-- model-services/llm-summary 服务需在 8003 端口提供 HTTP API
-- 接口规范见 docs/api-contracts.md
+依赖：
+- meetingsummary/ 目录（与 backend 同级目录）
+- Ollama 服务运行中，config.json 配置正确
 """
 
-import httpx
+import json
+import subprocess
+import tempfile
+import uuid
+from pathlib import Path
+from typing import Optional
 
 from app.config import settings
 
 
+# meetingsummary 模块路径（与 backend 同级）
+MEETINGSUMMARY_DIR = Path(__file__).resolve().parents[2] / "meetingsummary"
+
+
 class SummaryService:
     def __init__(self):
-        self.model_url = settings.LLM_SUMMARY_SERVICE_URL  # 默认 http://llm-summary-stub:8003
+        self.meetingsummary_dir = MEETINGSUMMARY_DIR
 
-    async def summarize_period(self, meeting_id: str, transcript_lines: list[dict]) -> dict:
+    async def summarize_period(
+        self,
+        meeting_id: str,
+        transcript_lines: list[dict],
+        *,
+        output_dir: Optional[Path] = None,
+    ) -> dict:
         """
-        阶段总结接口。
-        输入一段转写文本，返回要点列表。
-
-        TODO: 算法团队替换此处实现
+        阶段总结：输入转写文本，返回要点列表。
+        调用 meetingsummary 模块，Ollama 生成结构化摘要。
 
         Args:
             meeting_id: 会议 ID
-            transcript_lines: 转写行列表 [{"speaker": "发言人A", "text": "...", "start": 0.0, "end": 3.5}]
+            transcript_lines: 转写行 [{"speaker": "发言人A", "text": "..."}]
+            output_dir: 输出目录，默认临时目录
 
         Returns:
-            {"bullet_points": ["要点1", "要点2", "要点3"]}
+            {"bullet_points": ["要点1", "要点2", ...]}
         """
-        # STUB: 调用 model-services/llm-summary
-        try:
-            async with httpx.AsyncClient(timeout=120) as client:
-                resp = await client.post(
-                    f"{self.model_url}/summarize/period",
-                    json={
-                        "meeting_id": meeting_id,
-                        "transcript_lines": transcript_lines,
-                    },
-                )
-                resp.raise_for_status()
-                return resp.json()
-        except Exception:
-            # 降级返回 mock
-            return self._mock_period_summary()
+        if output_dir is None:
+            output_dir = Path(tempfile.mkdtemp(prefix="summary_period_"))
+
+        transcript_text = self._format_transcript(transcript_lines)
+        result = self._call_meetingsummary(
+            transcript_text,
+            output_dir=output_dir,
+            prefix=f"period_{meeting_id[:8]}",
+            skip_eval=True,
+            skip_completeness=True,
+        )
+
+        # 提取 bullet_points（从 summary dict 的 discussion_points 映射）
+        bullet_points = []
+        if result:
+            # 优先用 tldr 作为第一个要点
+            if result.get("tldr"):
+                bullet_points.append(result["tldr"])
+            # discussion_points 转为字符串要点
+            for point in result.get("discussion_points", []):
+                if isinstance(point, dict):
+                    title = point.get("title", "")
+                    summary = point.get("summary", "")
+                    if title:
+                        bullet_points.append(f"【{title}】{summary}" if summary else title)
+                elif isinstance(point, str):
+                    bullet_points.append(point)
+
+        return {"bullet_points": bullet_points}
 
     async def summarize_final(
         self,
         meeting_id: str,
         all_transcript_lines: list[dict],
         period_summaries: list[dict],
+        *,
+        output_dir: Optional[Path] = None,
     ) -> dict:
         """
-        最终总结接口。
-        输入全部转写文本和阶段总结，返回完整会议纪要。
+        最终总结：输入全部转写文本，返回完整会议纪要。
+        调用 meetingsummary 模块，Ollama 生成结构化摘要。
 
-        TODO: 算法团队替换此处实现
+        Args:
+            meeting_id: 会议 ID
+            all_transcript_lines: 全部转写行
+            period_summaries: 已有阶段总结列表（可为空）
+            output_dir: 输出目录，默认临时目录
 
         Returns:
             {
@@ -67,57 +100,132 @@ class SummaryService:
                 "action_items": [{"content": "...", "assignee": "...", "due_date": "..."}]
             }
         """
-        # STUB: 调用 model-services/llm-summary
-        try:
-            async with httpx.AsyncClient(timeout=300) as client:
-                resp = await client.post(
-                    f"{self.model_url}/summarize/final",
-                    json={
-                        "meeting_id": meeting_id,
-                        "all_transcript_lines": all_transcript_lines,
-                        "period_summaries": period_summaries,
-                    },
-                )
-                resp.raise_for_status()
-                return resp.json()
-        except Exception:
-            # 降级返回 mock
-            return self._mock_final_summary()
+        if output_dir is None:
+            output_dir = Path(tempfile.mkdtemp(prefix="summary_final_"))
 
-    def _mock_period_summary(self) -> dict:
-        """Mock 数据，仅用于开发阶段联调"""
+        transcript_text = self._format_transcript(all_transcript_lines)
+        result = self._call_meetingsummary(
+            transcript_text,
+            output_dir=output_dir,
+            prefix=f"final_{meeting_id[:8]}",
+            skip_eval=True,
+            skip_completeness=True,
+        )
+
+        if not result:
+            return self._empty_summary()
+
+        # 映射 meetingsummary 输出格式 → API 期望格式
+        overview = result.get("meeting", {}).get("summary", result.get("tldr", ""))
+
+        key_decisions = []
+        for d in result.get("decisions", []):
+            if isinstance(d, dict):
+                desc = d.get("description", d.get("decision", str(d)))
+                key_decisions.append(desc)
+            elif isinstance(d, str):
+                key_decisions.append(d)
+
+        action_items = []
+        for a in result.get("action_items", []):
+            if isinstance(a, dict):
+                action_items.append({
+                    "content": a.get("task", a.get("description", a.get("content", ""))),
+                    "assignee": a.get("assignee"),
+                    "due_date": a.get("deadline", a.get("due_date")),
+                })
+            elif isinstance(a, str):
+                action_items.append({"content": a, "assignee": None, "due_date": None})
+
         return {
-            "bullet_points": [
-                "讨论了Q2产品路线图，确定了三个核心功能模块",
-                "前端团队将采用React 18 + TypeScript技术栈",
-                "后端使用FastAPI，预计6月底完成第一版",
-            ]
+            "overview": overview,
+            "key_decisions": key_decisions,
+            "action_items": action_items,
         }
 
-    def _mock_final_summary(self) -> dict:
-        """Mock 数据，仅用于开发阶段联调"""
+    def _format_transcript(self, lines: list[dict]) -> str:
+        """将转写行格式化为 meetingsummary 可读的文本格式。"""
+        parts = []
+        for line in lines:
+            speaker = line.get("speaker", "未知")
+            text = line.get("text", "")
+            if text:
+                parts.append(f"{speaker}：{text}")
+        return "\n".join(parts)
+
+    def _call_meetingsummary(
+        self,
+        transcript_text: str,
+        output_dir: Path,
+        prefix: str,
+        *,
+        skip_eval: bool = False,
+        skip_completeness: bool = False,
+        skip_actions: bool = True,
+    ) -> Optional[dict]:
+        """
+        调用 meetingsummary/main.py 生成摘要。
+        将转写文本写入临时文件，调用 CLI，读取输出的 JSON。
+        """
+        config_path = self.meetingsummary_dir / "config.json"
+        if not config_path.exists():
+            print(f"[SummaryService] meetingsummary config.json 不存在: {config_path}")
+            return None
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 写入临时转写文件
+        input_file = output_dir / f"{prefix}_input.txt"
+        input_file.write_text(transcript_text, encoding="utf-8")
+
+        cmd = [
+            "python",
+            str(self.meetingsummary_dir / "main.py"),
+            "-i", str(input_file),
+            "-o", str(output_dir),
+            "--prefix", prefix,
+            "--no-map-reduce",  # 阶段总结文本短，直接摘要
+            "--skip-completeness" if skip_completeness else "",
+            "--skip-eval" if skip_eval else "",
+            "--skip-actions" if skip_actions else "",
+        ]
+        cmd = [c for c in cmd if c]  # 过滤空字符串
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=180,
+                cwd=str(self.meetingsummary_dir),
+            )
+            print(f"[SummaryService] meetingsummary stdout:\n{result.stdout}")
+            if result.stderr:
+                print(f"[SummaryService] meetingsummary stderr:\n{result.stderr}")
+        except subprocess.TimeoutExpired:
+            print(f"[SummaryService] meetingsummary 超时（180s）")
+            return None
+        except Exception as e:
+            print(f"[SummaryService] meetingsummary 调用失败: {e}")
+            return None
+
+        # 读取输出的 JSON
+        import datetime
+        date_str = datetime.date.today().strftime("%Y%m%d")
+        json_path = output_dir / f"{prefix}_{date_str}.json"
+        if not json_path.exists():
+            print(f"[SummaryService] 摘要文件不存在: {json_path}")
+            return None
+
+        try:
+            return json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"[SummaryService] 解析摘要 JSON 失败: {e}")
+            return None
+
+    def _empty_summary(self) -> dict:
         return {
-            "overview": "本次会议讨论了Q2产品规划，确定了技术选型和开发计划。与会人员就前端框架、后端架构、AI模型集成等关键问题达成一致。",
-            "key_decisions": [
-                "采用React 18 + TypeScript作为前端技术栈",
-                "后端使用FastAPI + Celery异步架构",
-                "ASR和LLM模型独立部署，通过HTTP接口调用",
-            ],
-            "action_items": [
-                {
-                    "content": "完成前端原型设计",
-                    "assignee": "张三",
-                    "due_date": "2026-05-20",
-                },
-                {
-                    "content": "搭建后端API框架",
-                    "assignee": "李四",
-                    "due_date": "2026-05-25",
-                },
-                {
-                    "content": "完成ASR模型服务化",
-                    "assignee": "王五",
-                    "due_date": "2026-06-01",
-                },
-            ],
+            "overview": "",
+            "key_decisions": [],
+            "action_items": [],
         }

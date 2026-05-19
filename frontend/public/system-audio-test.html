@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>系统音频诊断</title>
+  <style>
+    body { font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 20px; }
+    .log { background: #0a0a0a; padding: 10px; margin: 10px 0; border-radius: 4px; max-height: 400px; overflow-y: auto; font-size: 13px; }
+    .log-line { margin: 2px 0; }
+    .ok { color: #4caf50; }
+    .error { color: #f44336; }
+    .warn { color: #ff9800; }
+    .info { color: #2196f3; }
+    button { padding: 8px 16px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #1976d2; color: white; }
+    .btn-danger { background: #d32f2f; color: white; }
+    .btn-success { background: #388e3c; color: white; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    h2 { color: #fff; }
+    .meter { display: inline-block; width: 200px; height: 20px; background: #333; border-radius: 4px; overflow: hidden; vertical-align: middle; }
+    .meter-fill { height: 100%; background: linear-gradient(to right, #4caf50, #ff9800, #f44336); width: 0%; transition: width 0.1s; }
+  </style>
+</head>
+<body>
+  <h2>系统音频捕获诊断</h2>
+
+  <button id="btnTest" class="btn-primary" onclick="runTest()">开始诊断</button>
+  <button id="btnStop" class="btn-danger" onclick="stopTest()" disabled>停止</button>
+
+  <div>
+    <strong>音量电平:</strong>
+    <div class="meter"><div id="meterFill" class="meter-fill"></div></div>
+    <span id="meterVal">--</span>
+  </div>
+
+  <div id="log" class="log"></div>
+
+  <div style="margin-top: 20px;">
+    <h3>诊断说明</h3>
+    <ul>
+      <li>点击"开始诊断"，在弹出的系统选择器中选择一个<strong>标签页</strong>（里面要有正在播放的音乐/视频）</li>
+      <li>如果看到绿色的"能量值"大于 0.001 → 系统音频捕获正常</li>
+      <li>如果能量始终是 0.00000000 → 你的 Windows 系统不支持 getDisplayMedia 系统音频（常见问题，需要用替代方案）</li>
+    </ul>
+    <h3>Windows 替代方案</h3>
+    <ul>
+      <li>方案1: 安装 <a href="https://vb-audio.com/Cable/" style="color:#2196f3">VB-Audio Virtual Cable</a>（虚拟音频线），然后用麦克风模式录音系统声音</li>
+      <li>方案2: 改用麦克风模式，让对方在会议中直接说话</li>
+      <li>方案3: 使用 Edge 浏览器（Edge 对 Windows 系统音频支持更好）</li>
+    </ul>
+  </div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const meterFill = document.getElementById('meterFill');
+    const meterVal = document.getElementById('meterVal');
+    const btnTest = document.getElementById('btnTest');
+    const btnStop = document.getElementById('btnStop');
+
+    let testStream = null;
+    let testCtx = null;
+    let testProcessor = null;
+    let testSource = null;
+    let animationId = null;
+    let maxEnergy = 0;
+
+    function log(msg, type = 'info') {
+      const div = document.createElement('div');
+      div.className = 'log-line ' + type;
+      div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateMeter(energy) {
+      // energy 是均方值，范围 0~1，转换为百分比
+      // 0.01 对应 10%，0.1 对应 100%
+      const pct = Math.min(100, Math.sqrt(energy) * 500);
+      meterFill.style.width = pct + '%';
+      meterVal.textContent = energy.toFixed(8);
+      if (energy > maxEnergy) maxEnergy = energy;
+    }
+
+    async function runTest() {
+      log('=== 开始系统音频诊断 ===', 'info');
+      btnTest.disabled = true;
+      btnStop.disabled = false;
+
+      try {
+        log('调用 getDisplayMedia...', 'info');
+        testStream = await navigator.mediaDevices.getDisplayMedia({
+          video: false,  // 不需要视频
+          audio: true,
+        });
+
+        const audioTracks = testStream.getAudioTracks();
+        if (!audioTracks.length) {
+          log('错误: 没有音频轨道', 'error');
+          log('提示: 请在弹窗中选择标签页/窗口，并开启"分享音频"选项', 'warn');
+          stopTest();
+          return;
+        }
+
+        log('✓ 获取到音频轨道: ' + audioTracks[0].label, 'ok');
+        log('  readyState: ' + audioTracks[0].readyState, 'info');
+
+        // 停止视频轨道（如果有）
+        testStream.getVideoTracks().forEach(t => t.stop());
+
+        testCtx = new AudioContext();
+        log('AudioContext 采样率: ' + testCtx.sampleRate + ' Hz', 'info');
+
+        testSource = testCtx.createMediaStreamSource(testStream);
+
+        const PROCESSOR_CODE = `
+          class TestProc extends AudioWorkletProcessor {
+            process(inputs, outputs, parameters) {
+              const input = inputs[0];
+              if (!input || !input[0]) return true;
+              const d = input[0];
+              let sum = 0;
+              for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
+              const energy = sum / d.length;
+              console.log('[AW-TEST] energy=' + energy.toFixed(10) + ' len=' + d.length);
+              this.port.postMessage({ energy, len: d.length });
+              return true;
+            }
+          }
+          registerProcessor('test-proc', TestProc);
+        `;
+
+        const blob = new Blob([PROCESSOR_CODE], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        await testCtx.audioWorklet.addModule(url);
+        URL.revokeObjectURL(url);
+
+        testProcessor = new AudioWorkletNode(testCtx, 'test-proc');
+        testProcessor.port.onmessage = (e) => {
+          const { energy, len } = e.data;
+          updateMeter(energy);
+          if (energy > 0.0001) {
+            log('能量值=' + energy.toFixed(10) + ' ✓ 有音频信号！', 'ok');
+          }
+        };
+
+        testSource.connect(testProcessor);
+        testProcessor.connect(testCtx.destination);
+
+        log('✓ 音频管线已建立，等待音频数据...', 'ok');
+        log('提示: 请确保所选标签页/窗口正在播放声音', 'warn');
+
+        // 5秒后自动停止
+        animationId = setTimeout(() => {
+          log('=== 诊断完成 ===', 'info');
+          if (maxEnergy > 0.0001) {
+            log('结果: 系统音频捕获正常！max energy=' + maxEnergy.toFixed(10), 'ok');
+          } else if (maxEnergy > 0.000001) {
+            log('结果: 检测到微弱音频信号，可能是静音或音量极低', 'warn');
+          } else {
+            log('结果: 系统音频捕获失败！energy 始终为 0', 'error');
+            log('这是 Windows + Chrome 的已知限制，getDisplayMedia 无法正确捕获系统音频', 'error');
+            log('建议使用 VB-Audio Virtual Cable 或改用麦克风模式', 'warn');
+          }
+          stopTest();
+        }, 5000);
+
+      } catch (err) {
+        log('错误: ' + err.name + ': ' + err.message, 'error');
+        if (err.name === 'NotAllowedError') {
+          log('提示: 请在弹窗中选择标签页/窗口并开启音频', 'warn');
+        }
+        stopTest();
+      }
+    }
+
+    function stopTest() {
+      if (animationId) { clearTimeout(animationId); animationId = null; }
+      if (testProcessor) { try { testProcessor.disconnect(); testSource.disconnect(); } catch(e){} testProcessor = null; }
+      if (testCtx && testCtx.state !== 'closed') { testCtx.close(); testCtx = null; }
+      if (testStream) { testStream.getTracks().forEach(t => t.stop()); testStream = null; }
+      btnTest.disabled = false;
+      btnStop.disabled = true;
+    }
+  </script>
+</body>
+</html>

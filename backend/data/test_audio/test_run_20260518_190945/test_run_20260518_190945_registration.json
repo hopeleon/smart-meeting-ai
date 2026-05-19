@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-05-18T19:09:45.898918",
+  "timestamp": "20260518_190945",
+  "num_speakers": 8,
+  "random_seed": 190945,
+  "speakers": [
+    {
+      "speaker_id": "1202",
+      "name": "徐云",
+      "num_segments": 9
+    },
+    {
+      "speaker_id": "19",
+      "name": "陈磊",
+      "num_segments": 4
+    },
+    {
+      "speaker_id": "1047",
+      "name": "杨明",
+      "num_segments": 3
+    },
+    {
+      "speaker_id": "590",
+      "name": "高建国",
+      "num_segments": 8
+    },
+    {
+      "speaker_id": "613",
+      "name": "马永强",
+      "num_segments": 6
+    },
+    {
+      "speaker_id": "725",
+      "name": "郭娟",
+      "num_segments": 5
+    },
+    {
+      "speaker_id": "721",
+      "name": "郭霞",
+      "num_segments": 4
+    },
+    {
+      "speaker_id": "1075",
+      "name": "黄磊",
+      "num_segments": 3
+    }
+  ]
+}

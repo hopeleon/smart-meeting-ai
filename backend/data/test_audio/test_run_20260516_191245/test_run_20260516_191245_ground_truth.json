@@ -1,0 +1,296 @@
+{
+  "_meta": {
+    "total_duration_sec": 209.76,
+    "num_speakers": 4,
+    "num_segments": 26,
+    "target_duration_sec": 180,
+    "generated_at": "2026-05-16T19:12:45.155684",
+    "timestamp": "20260516_191245",
+    "splicing_method": "random_shuffle",
+    "random_seed": 123,
+    "speakers": [
+      {
+        "speaker_id": "1034",
+        "speaker_name": "何鹏",
+        "num_segments": 9
+      },
+      {
+        "speaker_id": "1153",
+        "speaker_name": "王丽",
+        "num_segments": 5
+      },
+      {
+        "speaker_id": "1049",
+        "speaker_name": "杨艳",
+        "num_segments": 5
+      },
+      {
+        "speaker_id": "791",
+        "speaker_name": "孙明",
+        "num_segments": 7
+      }
+    ]
+  },
+  "segments": [
+    {
+      "id": 1,
+      "speaker_id": "791",
+      "speaker_name": "孙明",
+      "start_ms": 0,
+      "end_ms": 6960,
+      "duration_ms": 6960,
+      "text": "如生产工人的工资 加工零件时消耗的电力 水",
+      "audio_file": "619c5c1f-a5e7-4e99-bf22-51b6c6cab465.wav"
+    },
+    {
+      "id": 2,
+      "speaker_id": "1034",
+      "speaker_name": "何鹏",
+      "start_ms": 7460,
+      "end_ms": 11400,
+      "duration_ms": 3940,
+      "text": "自二零零零年成立美洲代表处以来",
+      "audio_file": "e1eaf64d-18f4-4194-8299-8624dd667da4.wav"
+    },
+    {
+      "id": 3,
+      "speaker_id": "1049",
+      "speaker_name": "杨艳",
+      "start_ms": 11900,
+      "end_ms": 19100,
+      "duration_ms": 7200,
+      "text": "可是从经济学的角度来说 一个商业中心的形成",
+      "audio_file": "8409f3b6-7c23-48d7-99f9-0585de7d35d6.wav"
+    },
+    {
+      "id": 4,
+      "speaker_id": "791",
+      "speaker_name": "孙明",
+      "start_ms": 19600,
+      "end_ms": 26680,
+      "duration_ms": 7080,
+      "text": "包销权 由此日本人全面进入开滦矿区",
+      "audio_file": "b5e378de-d99f-43c3-9427-6bceacecd65b.wav"
+    },
+    {
+      "id": 5,
+      "speaker_id": "1153",
+      "speaker_name": "王丽",
+      "start_ms": 27180,
+      "end_ms": 34900,
+      "duration_ms": 7720,
+      "text": "袁惟仁零三曲 田恕仁词 田恕仁零四曲 严尊词",
+      "audio_file": "1299496b-2d74-405b-bd08-319c67945509.wav"
+    },
+    {
+      "id": 6,
+      "speaker_id": "1153",
+      "speaker_name": "王丽",
+      "start_ms": 35400,
+      "end_ms": 42340,
+      "duration_ms": 6940,
+      "text": "让李菊感到欣慰的是 队友们和球迷们对她的信任没有改变",
+      "audio_file": "5e9f5d2b-d2c0-47b6-8293-05fe30e0c1cf.wav"
+    },
+    {
+      "id": 7,
+      "speaker_id": "1034",
+      "speaker_name": "何鹏",
+      "start_ms": 42840,
+      "end_ms": 48980,
+      "duration_ms": 6140,
+      "text": "战列舰七艘 轻巡洋舰三艘 驱逐舰二十一艘",
+      "audio_file": "9ba4808d-cca6-4781-a39c-8362e626f901.wav"
+    },
+    {
+      "id": 8,
+      "speaker_id": "1034",
+      "speaker_name": "何鹏",
+      "start_ms": 49480,
+      "end_ms": 54760,
+      "duration_ms": 5280,
+      "text": "此诗多写世道艰难 表达了离愁别绪",
+      "audio_file": "03002fd6-1784-4274-80e2-e360d92aae09.wav"
+    },
+    {
+      "id": 9,
+      "speaker_id": "1034",
+      "speaker_name": "何鹏",
+      "start_ms": 55260,
+      "end_ms": 62960,
+      "duration_ms": 7700,
+      "text": "人口一点五一千九百八十一万 五十二",
+      "audio_file": "fadc669d-7909-470f-a3ba-7268438d9b84.wav"
+    },
+    {
+      "id": 10,
+      "speaker_id": "1049",
+      "speaker_name": "杨艳",
+      "start_ms": 63460,
+      "end_ms": 72700,
+      "duration_ms": 9240,
+      "text": "太子詹事为模仿之前的中国旧有机构并加以扩充功能",
+      "audio_file": "ad801b05-3d2f-4406-bfd1-22a832beb9d0.wav"
+    },
+    {
+      "id": 11,
+      "speaker_id": "1034",
+      "speaker_name": "何鹏",
+      "start_ms": 73200,
+      "end_ms": 80020,
+      "duration_ms": 6820,
+      "text": "笔顺编号 五五幺三幺二四角号码 二二幺四零",
+      "audio_file": "0939eecb-b360-4356-9385-54bd42c9ea7f.wav"
+    },
+    {
+      "id": 12,
+      "speaker_id": "791",
+      "speaker_name": "孙明",
+      "start_ms": 80520,
+      "end_ms": 94080,
+      "duration_ms": 13560,
+      "text": "此实小奴丧良 乘危窃逃 华家盟姊赠以 彼无颜见卿",
+      "audio_file": "4fe60fc5-2f17-4b10-b49e-d6f8a55ab323.wav"
+    },
+    {
+      "id": 13,
+      "speaker_id": "1153",
+      "speaker_name": "王丽",
+      "start_ms": 94580,
+      "end_ms": 102740,
+      "duration_ms": 8160,
+      "text": "为了延续秀丽的生命 选择了自己死亡附身于秀丽体内",
+      "audio_file": "0509c568-f46b-49ec-b4a4-22dfd64393d7.wav"
+    },
+    {
+      "id": 14,
+      "speaker_id": "791",
+      "speaker_name": "孙明",
+      "start_ms": 103240,
+      "end_ms": 114400,
+      "duration_ms": 11160,
+      "text": "桑岛法子 零六零七点一二零八零九点一零专辑",
+      "audio_file": "ae6b8105-a057-4e1f-93e4-221c754e42a1.wav"
+    },
+    {
+      "id": 15,
+      "speaker_id": "791",
+      "speaker_name": "孙明",
+      "start_ms": 114900,
+      "end_ms": 120900,
+      "duration_ms": 6000,
+      "text": "明治三十七年 一九零四年 九月",
+      "audio_file": "785bce6a-37e3-4f11-917b-05c44ccba258.wav"
+    },
+    {
+      "id": 16,
+      "speaker_id": "1049",
+      "speaker_name": "杨艳",
+      "start_ms": 121400,
+      "end_ms": 129680,
+      "duration_ms": 8280,
+      "text": "如果有一度转为二度的话 那也没什么好惊讶或叹息的",
+      "audio_file": "97d11ed0-9d1f-423d-9eab-2c90a81e083f.wav"
+    },
+    {
+      "id": 17,
+      "speaker_id": "1034",
+      "speaker_name": "何鹏",
+      "start_ms": 130180,
+      "end_ms": 136540,
+      "duration_ms": 6360,
+      "text": "全乡有初级中学 高等中学各一所 小学十八所",
+      "audio_file": "16569725-64c5-4aca-a05f-9429302a2f78.wav"
+    },
+    {
+      "id": 18,
+      "speaker_id": "1049",
+      "speaker_name": "杨艳",
+      "start_ms": 137040,
+      "end_ms": 144600,
+      "duration_ms": 7560,
+      "text": "年轻人必须立在客人旁边 为客人斟酒后才能入座",
+      "audio_file": "c914adf6-1681-4c1a-8bfa-a3eebbe3bdf1.wav"
+    },
+    {
+      "id": 19,
+      "speaker_id": "1049",
+      "speaker_name": "杨艳",
+      "start_ms": 145100,
+      "end_ms": 153500,
+      "duration_ms": 8400,
+      "text": "北美荒原驯鹿和北美林地驯鹿相比 体型要较小些",
+      "audio_file": "16e8c1fe-ae17-4b1f-a9f0-cf0da3e2f7ab.wav"
+    },
+    {
+      "id": 20,
+      "speaker_id": "1153",
+      "speaker_name": "王丽",
+      "start_ms": 154000,
+      "end_ms": 160600,
+      "duration_ms": 6600,
+      "text": "路路通没有看见费克斯 因为他藏在阴暗的地方",
+      "audio_file": "c12e3a58-7e27-4ee4-adb0-a8b6648499a0.wav"
+    },
+    {
+      "id": 21,
+      "speaker_id": "1153",
+      "speaker_name": "王丽",
+      "start_ms": 161100,
+      "end_ms": 167560,
+      "duration_ms": 6460,
+      "text": "是的一支 突厥语民族是今天的主要成分之一",
+      "audio_file": "abc894ce-3282-412b-9448-f198e840252f.wav"
+    },
+    {
+      "id": 22,
+      "speaker_id": "1034",
+      "speaker_name": "何鹏",
+      "start_ms": 168060,
+      "end_ms": 172320,
+      "duration_ms": 4260,
+      "text": "总之 这显然是一叠毫无价值的废纸",
+      "audio_file": "2bed3562-355b-4a7d-b24d-61e684c7ffbb.wav"
+    },
+    {
+      "id": 23,
+      "speaker_id": "791",
+      "speaker_name": "孙明",
+      "start_ms": 172820,
+      "end_ms": 185540,
+      "duration_ms": 12720,
+      "text": "好景不长 何宝荣嫌黎耀辉太过沉闷 厌倦了这样的生活",
+      "audio_file": "6ee6293a-97cf-4b72-a2b4-dd901d4ac5b9.wav"
+    },
+    {
+      "id": 24,
+      "speaker_id": "1034",
+      "speaker_name": "何鹏",
+      "start_ms": 186040,
+      "end_ms": 191640,
+      "duration_ms": 5600,
+      "text": "近场光谱在研究量子点 纳米晶体 与位错",
+      "audio_file": "0a791b48-4750-4730-8135-a8c70fc8885e.wav"
+    },
+    {
+      "id": 25,
+      "speaker_id": "791",
+      "speaker_name": "孙明",
+      "start_ms": 192140,
+      "end_ms": 201860,
+      "duration_ms": 9720,
+      "text": " 正献官以下俱拜位十九 鸣赞唱 三跪九头",
+      "audio_file": "7be46126-4f1b-4447-94ec-9c1071749c0d.wav"
+    },
+    {
+      "id": 26,
+      "speaker_id": "1034",
+      "speaker_name": "何鹏",
+      "start_ms": 202360,
+      "end_ms": 209760,
+      "duration_ms": 7400,
+      "text": "若能在路上不时见到 最好能让东风将它们逐枝吹开",
+      "audio_file": "07056dec-bc26-4397-9c07-548359e8329c.wav"
+    }
+  ]
+}

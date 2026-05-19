@@ -1,44 +1,94 @@
-import type { WebSocketMessage, TranscriptSegment, PeriodSummary } from '../types/meeting'
-import { isMockMode } from './client'
+import type { WebSocketMessage } from '../types/meeting'
 
 const WS_BASE = import.meta.env.VITE_WS_BASE_URL || `ws://${window.location.host}/ws`
 
 type MessageHandler = (message: WebSocketMessage) => void
+type StatusHandler = (connected: boolean) => void
 
 export class MeetingWebSocket {
   private ws: WebSocket | null = null
   private meetingId: string
   private handlers: MessageHandler[] = []
+  private statusHandlers: StatusHandler[] = []
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  private mockTimer: ReturnType<typeof setInterval> | null = null
+  private reconnectAttempts = 0
+  private readonly maxReconnectAttempts = 5
+  private readonly reconnectDelay = 3000
+  private audioCount = 0
+  private transcriptCount = 0
+  private _onopenHandlers: (() => void)[] = []
+  private _destroyed = false  // 标记实例已销毁，阻止重连
 
   constructor(meetingId: string) {
     this.meetingId = meetingId
   }
 
   connect(): void {
-    if (isMockMode()) {
-      this.startMockMode()
+    if (this._destroyed) {
+      console.log('[WS] 实例已销毁，跳过连接')
       return
     }
 
+    console.log(`[WS] 连接中: ${this.meetingId} (重连次数=${this.reconnectAttempts})`)
+
+    // 清理旧连接
+    if (this.ws) {
+      this.ws.onopen = null
+      this.ws.onmessage = null
+      this.ws.onclose = null
+      this.ws.onerror = null
+      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+        this.ws.close()
+      }
+      this.ws = null
+    }
+
     this.ws = new WebSocket(`${WS_BASE}/meeting/${this.meetingId}`)
+
+    this.ws.onopen = () => {
+      console.log(`[WS] ✓ 连接已建立 (meetingId=${this.meetingId})`)
+      this.reconnectAttempts = 0  // 重连成功，重置计数
+      this.statusHandlers.forEach((h) => h(true))
+      this._onopenHandlers.forEach((h) => h())
+    }
 
     this.ws.onmessage = (event) => {
       try {
         const message: WebSocketMessage = JSON.parse(event.data)
         this.handlers.forEach((h) => h(message))
-      } catch {
-        // ignore parse errors
+      } catch (err) {
+        console.warn('[WS] 消息解析失败:', err, event.data)
       }
     }
 
-    this.ws.onclose = () => {
-      this.reconnectTimer = setTimeout(() => this.connect(), 3000)
+    this.ws.onclose = (e) => {
+      this.ws = null
+      this.statusHandlers.forEach((h) => h(false))
+
+      if (this._destroyed) {
+        console.log('[WS] 实例已销毁，停止重连')
+        return
+      }
+
+      if (e.code === 1000) {
+        console.log(`[WS] 连接已关闭 (code=1000, 用户主动断开)`)
+        return
+      }
+
+      console.log(`[WS] 连接异常断开 (code=${e.code})，尝试重连...`)
+
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++
+        const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 10000)  // 递增延迟，最多 10s
+        console.log(`[WS] ${delay / 1000}s 后重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
+        this.reconnectTimer = setTimeout(() => this.connect(), delay)
+      } else {
+        console.error(`[WS] 重连次数已达上限 (${this.maxReconnectAttempts})，停止重连`)
+      }
     }
 
-    this.ws.onerror = () => {
-      this.ws?.close()
+    this.ws.onerror = (err) => {
+      console.error('[WS] 连接错误:', err)
     }
   }
 
@@ -49,95 +99,60 @@ export class MeetingWebSocket {
     }
   }
 
-  disconnect(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer)
+  onStatusChange(handler: StatusHandler): () => void {
+    this.statusHandlers.push(handler)
+    return () => {
+      this.statusHandlers = this.statusHandlers.filter((h) => h !== handler)
     }
-    if (this.mockTimer) {
-      clearInterval(this.mockTimer)
-    }
-    this.ws?.close()
-    this.ws = null
   }
 
-  private startMockMode(): void {
-    // 模拟实时转写推送
-    const mockTranscripts: TranscriptSegment[] = [
-      {
-        id: `mock-t-${Date.now()}`,
-        meeting_id: this.meetingId,
-        speaker_id: 'Speaker_1',
-        speaker_label: '发言人A',
-        text: '大家好，今天我们讨论一下Q2的产品规划。',
-        start_time: 0,
-        end_time: 3.5,
-        confidence: 0.95,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: `mock-t-${Date.now() + 1}`,
-        meeting_id: this.meetingId,
-        speaker_id: 'Speaker_2',
-        speaker_label: '发言人B',
-        text: '好的，我先汇报一下上个季度的完成情况。',
-        start_time: 3.5,
-        end_time: 7.0,
-        confidence: 0.92,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: `mock-t-${Date.now() + 2}`,
-        meeting_id: this.meetingId,
-        speaker_id: 'Speaker_1',
-        speaker_label: '发言人A',
-        text: '请说，我们都在听。',
-        start_time: 7.0,
-        end_time: 8.5,
-        confidence: 0.97,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: `mock-t-${Date.now() + 3}`,
-        meeting_id: this.meetingId,
-        speaker_id: 'Speaker_3',
-        speaker_label: '发言人C',
-        text: '我想补充一下，性能优化方面还有提升空间。',
-        start_time: 8.5,
-        end_time: 12.0,
-        confidence: 0.91,
-        created_at: new Date().toISOString(),
-      },
-    ]
+  set onopen(handler: () => void) {
+    this._onopenHandlers.push(handler)
+  }
 
-    let index = 0
-    this.mockTimer = setInterval(() => {
-      if (index < mockTranscripts.length) {
-        const msg: WebSocketMessage = {
-          type: 'transcript',
-          data: { ...mockTranscripts[index], id: `mock-${Date.now()}-${index}` },
-        }
-        this.handlers.forEach((h) => h(msg))
-        index++
-      } else {
-        // 模拟阶段总结
-        const summary: WebSocketMessage = {
-          type: 'period_summary',
-          data: {
-            id: `mock-s-${Date.now()}`,
-            meeting_id: this.meetingId,
-            period_start: 0,
-            period_end: 120,
-            bullet_points: [
-              '讨论了Q2产品路线图，确定了三个核心功能模块',
-              '前端团队将采用React 18 + TypeScript技术栈',
-              '后端使用FastAPI，预计6月底完成第一版',
-            ],
-            generated_at: new Date().toISOString(),
-          },
-        }
-        this.handlers.forEach((h) => h(summary))
-        if (this.mockTimer) clearInterval(this.mockTimer)
+  disconnect(): void {
+    this._destroyed = true  // 标记销毁，阻止重连
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
+    if (this.ws) {
+      this.ws.onopen = null
+      this.ws.onmessage = null
+      this.ws.onclose = null
+      this.ws.onerror = null
+      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+        this.ws.close(1000, '用户主动断开')
       }
-    }, 2000)
+      this.ws = null
+    }
+
+    this.statusHandlers.forEach((h) => h(false))
+    console.log(`[WS] 已断开 (meetingId=${this.meetingId})，音频包=${this.audioCount}, 转写=${this.transcriptCount}`)
+  }
+
+  sendAudioChunk(source: string, audioBase64: string): void {
+    if (this._destroyed) return
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.audioCount++
+      this.ws.send(JSON.stringify({ type: 'audio_chunk', source, audio: audioBase64 }))
+    } else {
+      console.warn(`[WS] 无法发送音频: readyState=${this.ws?.readyState}`)
+    }
+  }
+
+  get readyState(): number {
+    return this.ws?.readyState ?? WebSocket.CONNECTING
+  }
+
+  endMeeting(): void {
+    if (this._destroyed) return
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log('[WS] 发送 end_meeting')
+      this.ws.send(JSON.stringify({ type: 'end_meeting' }))
+    }
   }
 }

@@ -5,12 +5,18 @@ version: "3.9"
 
 services:
   backend:
+    volumes:
+      - ./backend/data:/app/data
+      - models_data:/app/models:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
     restart: always
     environment:
       - APP_ENV=production
 
   celery-worker:
+    volumes:
+      - ./backend/data:/app/data
+      - models_data:/app/models:ro
     command: celery -A app.workers.celery_app worker --loglevel=warning --concurrency=4
     restart: always
 
@@ -40,3 +46,4 @@ volumes:
   pgdata:
   redisdata:
   audio_data:
+  models_data:

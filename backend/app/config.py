@@ -19,11 +19,23 @@ class Settings(BaseSettings):
     DIARIZATION_SERVICE_URL: str = "http://localhost:8002"
     LLM_SUMMARY_SERVICE_URL: str = "http://localhost:8003"
 
+    # 本地 ASR 模型路径（Docker 容器内 /app/models/）
+    FUNASR_MODEL_DIR: str = ""
+    PUNC_MODEL_DIR: str = ""
+    CAMPPLUS_MODEL_DIR: str = ""
+    CAMPPLUS_EN_MODEL_DIR: str = ""
+    LOCAL_MODEL_DIR: str = ""
+    LOCAL_DEVICE: str = "cuda"
+
+    # 声纹识别配置
+    SPEAKER_SIMILARITY_THRESHOLD: float = 0.6  # 说话人识别相似度阈值 (0-1)
+    SPEAKER_MIN_CONFIDENCE: float = 0.5  # 最低置信度要求
+    SPEAKER_VOTE_WINDOWS: int = 3  # 多窗口投票数量
+
     # 文件存储
     AUDIO_STORAGE_PATH: str = "./audio_files"
 
     # 应用配置
-    APP_ENV: str = "development"
     SECRET_KEY: str = "change-me-in-production"
     CORS_ORIGINS: str = '["http://localhost","http://localhost:5173"]'
 
@@ -32,7 +44,8 @@ class Settings(BaseSettings):
         "env_file_encoding": "utf-8",
     }
 
-    def model_post_init(self, __context) -> None:
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         # local 模式自动切换为 SQLite
         if self.ENV == "local":
             db_path = os.path.join(

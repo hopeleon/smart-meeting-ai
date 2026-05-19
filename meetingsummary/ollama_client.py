@@ -1,9 +1,5 @@
 """LLM client supporting both Ollama (local) and OpenAI-compatible (external) APIs."""
 
-import sys
-
-import requests
-
 from config import OllamaConfig
 
 

@@ -27,8 +27,16 @@ export const useMeetingStore = create<MeetingState>((set) => ({
 
   setMeetings: (meetings) => set({ meetings }),
   setCurrentMeeting: (meeting) => set({ currentMeeting: meeting }),
-  addTranscript: (segment) =>
-    set((state) => ({ transcripts: [...state.transcripts, segment] })),
+  addTranscript: (segment: TranscriptSegment) =>
+    set((state) => {
+      // 基于 (speaker_id, text, start_ms) 去重
+      const key = `${segment.speaker_id}|${segment.text}|${segment.start_ms}`
+      const exists = state.transcripts.some(
+        (s) => `${s.speaker_id}|${s.text}|${s.start_ms}` === key,
+      )
+      if (exists) return state
+      return { transcripts: [...state.transcripts, segment] }
+    }),
   setTranscripts: (segments) => set({ transcripts: segments }),
   addPeriodSummary: (summary) =>
     set((state) => ({ periodSummaries: [...state.periodSummaries, summary] })),

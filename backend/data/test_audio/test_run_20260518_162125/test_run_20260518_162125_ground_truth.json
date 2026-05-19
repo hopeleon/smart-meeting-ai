@@ -1,0 +1,566 @@
+{
+  "_meta": {
+    "total_duration_sec": 362.26,
+    "num_speakers": 8,
+    "num_segments": 51,
+    "target_duration_sec": 180,
+    "generated_at": "2026-05-18T16:21:25.857937",
+    "timestamp": "20260518_162125",
+    "splicing_method": "random_shuffle",
+    "random_seed": 162125,
+    "speakers": [
+      {
+        "speaker_id": "346",
+        "speaker_name": "黄飞",
+        "num_segments": 6
+      },
+      {
+        "speaker_id": "1149",
+        "speaker_name": "梁飞",
+        "num_segments": 7
+      },
+      {
+        "speaker_id": "1093",
+        "speaker_name": "陈莉",
+        "num_segments": 3
+      },
+      {
+        "speaker_id": "913",
+        "speaker_name": "高娜",
+        "num_segments": 9
+      },
+      {
+        "speaker_id": "1082",
+        "speaker_name": "黄秀珍",
+        "num_segments": 7
+      },
+      {
+        "speaker_id": "780",
+        "speaker_name": "郭琪",
+        "num_segments": 8
+      },
+      {
+        "speaker_id": "712",
+        "speaker_name": "林兰",
+        "num_segments": 4
+      },
+      {
+        "speaker_id": "967",
+        "speaker_name": "朱刚",
+        "num_segments": 7
+      }
+    ]
+  },
+  "segments": [
+    {
+      "id": 1,
+      "speaker_id": "1093",
+      "speaker_name": "陈莉",
+      "start_ms": 0,
+      "end_ms": 5520,
+      "duration_ms": 5520,
+      "text": "鲁迅 两地书 四十七 我初毕业 既无经验",
+      "audio_file": "7f848cc5-02e8-4a83-b7f4-4950bc366750.wav"
+    },
+    {
+      "id": 2,
+      "speaker_id": "1149",
+      "speaker_name": "梁飞",
+      "start_ms": 6020,
+      "end_ms": 11060,
+      "duration_ms": 5040,
+      "text": "郊区盛产葡萄 桃 西瓜等水果",
+      "audio_file": "300469f0-6dc7-4a42-a6df-6462c4b18a6d.wav"
+    },
+    {
+      "id": 3,
+      "speaker_id": "346",
+      "speaker_name": "黄飞",
+      "start_ms": 11560,
+      "end_ms": 19840,
+      "duration_ms": 8280,
+      "text": "其中四十五度 百分之十二点五三百一十五 和八十七点五度",
+      "audio_file": "d311fa4c-a401-43e3-8db3-cd850759286d.wav"
+    },
+    {
+      "id": 4,
+      "speaker_id": "1149",
+      "speaker_name": "梁飞",
+      "start_ms": 20340,
+      "end_ms": 29580,
+      "duration_ms": 9240,
+      "text": "并且 福州赛将是筹划中的城市飞奔海峡赛的主战场和起点",
+      "audio_file": "3634206d-8f94-44cf-aa78-e2b1f51ea04b.wav"
+    },
+    {
+      "id": 5,
+      "speaker_id": "780",
+      "speaker_name": "郭琪",
+      "start_ms": 30080,
+      "end_ms": 37640,
+      "duration_ms": 7560,
+      "text": "位六如果为零 则表示存取日历时钟数据 为一表示存取数据",
+      "audio_file": "17c377aa-15dd-408a-9dc1-9edf80cfc45a.wav"
+    },
+    {
+      "id": 6,
+      "speaker_id": "913",
+      "speaker_name": "高娜",
+      "start_ms": 38140,
+      "end_ms": 44020,
+      "duration_ms": 5880,
+      "text": "本篇主要介绍高地风笛 著名的高地风笛 苏格兰盖尔语",
+      "audio_file": "6076f4ba-2d99-4e7b-8298-742355f33496.wav"
+    },
+    {
+      "id": 7,
+      "speaker_id": "913",
+      "speaker_name": "高娜",
+      "start_ms": 44520,
+      "end_ms": 49920,
+      "duration_ms": 5400,
+      "text": "一八一四年 一八九四年 一九一七年 一九九七年",
+      "audio_file": "4aba5673-9b79-4dd1-b818-67aa6961c654.wav"
+    },
+    {
+      "id": 8,
+      "speaker_id": "712",
+      "speaker_name": "林兰",
+      "start_ms": 50420,
+      "end_ms": 57520,
+      "duration_ms": 7100,
+      "text": "一九八五年后 他参加红外辐射加热技术研讨会",
+      "audio_file": "1d41eb26-7d2b-47fd-8356-4c71aa6e8a87.wav"
+    },
+    {
+      "id": 9,
+      "speaker_id": "346",
+      "speaker_name": "黄飞",
+      "start_ms": 58020,
+      "end_ms": 65460,
+      "duration_ms": 7440,
+      "text": "太仓浏河镇碑 福建长乐碑 印度古里纪念碑",
+      "audio_file": "19f96fa8-e976-47a3-b21c-a92ee3eac50b.wav"
+    },
+    {
+      "id": 10,
+      "speaker_id": "1082",
+      "speaker_name": "黄秀珍",
+      "start_ms": 65960,
+      "end_ms": 73240,
+      "duration_ms": 7280,
+      "text": "周汝昌 题张公者篆刻 二零零三年三月",
+      "audio_file": "3979f70f-7f0e-4a9f-80b3-4f05047d9a91.wav"
+    },
+    {
+      "id": 11,
+      "speaker_id": "1082",
+      "speaker_name": "黄秀珍",
+      "start_ms": 73740,
+      "end_ms": 80940,
+      "duration_ms": 7200,
+      "text": "这一方面 拿中央红色区域来说 曾经作了艰苦的教育工作",
+      "audio_file": "7e6f0135-d97e-49d5-85a9-01d9144803dc.wav"
+    },
+    {
+      "id": 12,
+      "speaker_id": "346",
+      "speaker_name": "黄飞",
+      "start_ms": 81440,
+      "end_ms": 86960,
+      "duration_ms": 5520,
+      "text": "在来自各方面拥护李唐的压力下",
+      "audio_file": "a625c82b-ab03-4cb9-b28c-2ea885a67ec2.wav"
+    },
+    {
+      "id": 13,
+      "speaker_id": "780",
+      "speaker_name": "郭琪",
+      "start_ms": 87460,
+      "end_ms": 92260,
+      "duration_ms": 4800,
+      "text": "碧桂园和绿地已经迎来收获期 不光是上述企业",
+      "audio_file": "698db444-d9e7-4670-a722-0737bebd7e09.wav"
+    },
+    {
+      "id": 14,
+      "speaker_id": "712",
+      "speaker_name": "林兰",
+      "start_ms": 92760,
+      "end_ms": 99280,
+      "duration_ms": 6520,
+      "text": "始皇欲游天下 道九原 直抵甘泉 乃使蒙恬通道",
+      "audio_file": "5fe0e404-67de-488c-870b-a8da1f9bc008.wav"
+    },
+    {
+      "id": 15,
+      "speaker_id": "346",
+      "speaker_name": "黄飞",
+      "start_ms": 99780,
+      "end_ms": 107100,
+      "duration_ms": 7320,
+      "text": "在旧版之中 似乎还爱卖弄文才 一面写 一面接招",
+      "audio_file": "87815325-b4e8-4254-944b-a2c49a91be54.wav"
+    },
+    {
+      "id": 16,
+      "speaker_id": "1093",
+      "speaker_name": "陈莉",
+      "start_ms": 107600,
+      "end_ms": 113240,
+      "duration_ms": 5640,
+      "text": "当年湖面比现在要宽 连接湖心小岛的堤未修",
+      "audio_file": "bdbb121b-31a2-4b83-9521-d97b2373477f.wav"
+    },
+    {
+      "id": 17,
+      "speaker_id": "967",
+      "speaker_name": "朱刚",
+      "start_ms": 113740,
+      "end_ms": 120340,
+      "duration_ms": 6600,
+      "text": "但他的后代 奥托家族的国王们继续统治了东法兰克王国一个世纪左右",
+      "audio_file": "cb34a245-bf47-42bd-b7eb-ae25ab4f1992.wav"
+    },
+    {
+      "id": 18,
+      "speaker_id": "712",
+      "speaker_name": "林兰",
+      "start_ms": 120840,
+      "end_ms": 124740,
+      "duration_ms": 3900,
+      "text": "承担国务院交办的城市总体规划",
+      "audio_file": "9f4691ff-58da-45a5-80c4-c8a60ddb1f57.wav"
+    },
+    {
+      "id": 19,
+      "speaker_id": "712",
+      "speaker_name": "林兰",
+      "start_ms": 125240,
+      "end_ms": 131980,
+      "duration_ms": 6740,
+      "text": "如今在房里悬挂蒋氏活动照片 成为斑竹主要景点",
+      "audio_file": "a9a2d7a0-7b6a-4e87-b95f-9dc60b7d565f.wav"
+    },
+    {
+      "id": 20,
+      "speaker_id": "1082",
+      "speaker_name": "黄秀珍",
+      "start_ms": 132480,
+      "end_ms": 140860,
+      "duration_ms": 8380,
+      "text": "如果大量进食后再晒到太阳 就会发生 蔬菜日光性皮疹",
+      "audio_file": "4765a7e8-3f31-4a4a-8af2-5123ac61f289.wav"
+    },
+    {
+      "id": 21,
+      "speaker_id": "780",
+      "speaker_name": "郭琪",
+      "start_ms": 141360,
+      "end_ms": 147600,
+      "duration_ms": 6240,
+      "text": "全县年降雨量一七二八毫米 比常年多三百一十四毫米",
+      "audio_file": "ede68618-4591-4948-9693-bf5ee209238b.wav"
+    },
+    {
+      "id": 22,
+      "speaker_id": "1149",
+      "speaker_name": "梁飞",
+      "start_ms": 148100,
+      "end_ms": 157220,
+      "duration_ms": 9120,
+      "text": "光亲至营 谕以先国家后私雠之义 皆感悟解去",
+      "audio_file": "84e9a7a3-1aa4-4a25-9031-b3ed9e4bb454.wav"
+    },
+    {
+      "id": 23,
+      "speaker_id": "967",
+      "speaker_name": "朱刚",
+      "start_ms": 157720,
+      "end_ms": 163000,
+      "duration_ms": 5280,
+      "text": "领导班子成员之间的相互制约的机制 以避免权力的过分集中",
+      "audio_file": "ec5acc33-d566-4565-8e3d-1bcb2ca5bf6a.wav"
+    },
+    {
+      "id": 24,
+      "speaker_id": "967",
+      "speaker_name": "朱刚",
+      "start_ms": 163500,
+      "end_ms": 169740,
+      "duration_ms": 6240,
+      "text": "刘师培 南北文学不同论 亦称 春秋以降 诸子并立",
+      "audio_file": "984b0f99-9238-42de-a749-3d7cc9a2eb1d.wav"
+    },
+    {
+      "id": 25,
+      "speaker_id": "1082",
+      "speaker_name": "黄秀珍",
+      "start_ms": 170240,
+      "end_ms": 180780,
+      "duration_ms": 10540,
+      "text": "口味清鲜 淡而不薄 烹调讲究 二轻一重 即轻油",
+      "audio_file": "ad4fc2bb-ffb6-4eb7-86ef-08e7f668817b.wav"
+    },
+    {
+      "id": 26,
+      "speaker_id": "1149",
+      "speaker_name": "梁飞",
+      "start_ms": 181280,
+      "end_ms": 187400,
+      "duration_ms": 6120,
+      "text": "按照路透社的说法 两名领导人先前不顾国内质疑",
+      "audio_file": "ee27a98c-46eb-4858-9575-bac353c5770c.wav"
+    },
+    {
+      "id": 27,
+      "speaker_id": "967",
+      "speaker_name": "朱刚",
+      "start_ms": 187900,
+      "end_ms": 194620,
+      "duration_ms": 6720,
+      "text": "是之 袁逢将过继给其兄袁成 袁绍在朝官拜",
+      "audio_file": "87981089-a6b7-4f40-9630-a5ea2a81ff4e.wav"
+    },
+    {
+      "id": 28,
+      "speaker_id": "913",
+      "speaker_name": "高娜",
+      "start_ms": 195120,
+      "end_ms": 202560,
+      "duration_ms": 7440,
+      "text": "美国国家海洋和大气管理局隶属于美国商业部下属的科技部门",
+      "audio_file": "3a5edb5b-7315-4968-b223-38d3c7067f6f.wav"
+    },
+    {
+      "id": 29,
+      "speaker_id": "913",
+      "speaker_name": "高娜",
+      "start_ms": 203060,
+      "end_ms": 213380,
+      "duration_ms": 10320,
+      "text": "陛下顷来酒色过度 不虔郊庙之神 专媚淫昏之鬼",
+      "audio_file": "5ea052e9-75c6-423f-b27b-ddf5df8ec366.wav"
+    },
+    {
+      "id": 30,
+      "speaker_id": "346",
+      "speaker_name": "黄飞",
+      "start_ms": 213880,
+      "end_ms": 218800,
+      "duration_ms": 4920,
+      "text": "父命难违 但赵恒实在舍不得刘娥",
+      "audio_file": "d906b7cc-30d1-437d-95c3-0763719bf21b.wav"
+    },
+    {
+      "id": 31,
+      "speaker_id": "1082",
+      "speaker_name": "黄秀珍",
+      "start_ms": 219300,
+      "end_ms": 224080,
+      "duration_ms": 4780,
+      "text": "优化产业结构 开发特色餐饮",
+      "audio_file": "dc40a3a2-8134-47e9-a508-bb87142be0d7.wav"
+    },
+    {
+      "id": 32,
+      "speaker_id": "913",
+      "speaker_name": "高娜",
+      "start_ms": 224580,
+      "end_ms": 231660,
+      "duration_ms": 7080,
+      "text": "减八月十日穿越奥玛山洞和威比河 考察大裂谷底部",
+      "audio_file": "839926fb-6616-41a1-9748-445f2b9bacd2.wav"
+    },
+    {
+      "id": 33,
+      "speaker_id": "780",
+      "speaker_name": "郭琪",
+      "start_ms": 232160,
+      "end_ms": 236960,
+      "duration_ms": 4800,
+      "text": "但大量事实使他更为饥荒所引起的灾难而震惊",
+      "audio_file": "38358457-4272-45b8-a177-5b1a4cf82ab5.wav"
+    },
+    {
+      "id": 34,
+      "speaker_id": "913",
+      "speaker_name": "高娜",
+      "start_ms": 237460,
+      "end_ms": 242740,
+      "duration_ms": 5280,
+      "text": "他们的研究虽然信息广博 但显然具有局限性",
+      "audio_file": "eeae4c7b-f16f-4eb1-aa7c-c3c1a982e64a.wav"
+    },
+    {
+      "id": 35,
+      "speaker_id": "1149",
+      "speaker_name": "梁飞",
+      "start_ms": 243240,
+      "end_ms": 249960,
+      "duration_ms": 6720,
+      "text": "可根据痰病原学检查 选用针对性的抗菌药物治疗",
+      "audio_file": "2e905588-60a6-4502-b4c4-4481d8d8fa5c.wav"
+    },
+    {
+      "id": 36,
+      "speaker_id": "967",
+      "speaker_name": "朱刚",
+      "start_ms": 250460,
+      "end_ms": 255020,
+      "duration_ms": 4560,
+      "text": "查珀尔敦 乌蒂布里奇 夏军斯多克布里奇",
+      "audio_file": "d332db4d-337a-41ff-808f-bdf86e7e1842.wav"
+    },
+    {
+      "id": 37,
+      "speaker_id": "346",
+      "speaker_name": "黄飞",
+      "start_ms": 255520,
+      "end_ms": 262840,
+      "duration_ms": 7320,
+      "text": "哈勃图像显示 这些环位于天王星的上方或下方",
+      "audio_file": "c47499e2-27de-4872-890e-eb1b0dc74356.wav"
+    },
+    {
+      "id": 38,
+      "speaker_id": "1093",
+      "speaker_name": "陈莉",
+      "start_ms": 263340,
+      "end_ms": 269940,
+      "duration_ms": 6600,
+      "text": "卫星遥感调查具有传统的调查方法无法比拟的优势",
+      "audio_file": "43b80601-4c43-4a33-8659-d60551c7aa1c.wav"
+    },
+    {
+      "id": 39,
+      "speaker_id": "1149",
+      "speaker_name": "梁飞",
+      "start_ms": 270440,
+      "end_ms": 278479,
+      "duration_ms": 8039,
+      "text": "构成欺诈故意 不仅为直接故意 而且也包括间接故意",
+      "audio_file": "157b0b8f-7784-4e75-900c-25821ec89067.wav"
+    },
+    {
+      "id": 40,
+      "speaker_id": "967",
+      "speaker_name": "朱刚",
+      "start_ms": 278979,
+      "end_ms": 286659,
+      "duration_ms": 7680,
+      "text": "露重芭蕉叶 香凝橘柚枝 简书随吏散 宝骑与僧期",
+      "audio_file": "1173cfa1-f88e-450a-a03a-291db7f1b27f.wav"
+    },
+    {
+      "id": 41,
+      "speaker_id": "780",
+      "speaker_name": "郭琪",
+      "start_ms": 287159,
+      "end_ms": 291719,
+      "duration_ms": 4560,
+      "text": "我觉得这话很真实 我也觉得很惭愧 你是个年轻人",
+      "audio_file": "a55792b8-c767-4d7b-83ff-8a11dd1a35a6.wav"
+    },
+    {
+      "id": 42,
+      "speaker_id": "1082",
+      "speaker_name": "黄秀珍",
+      "start_ms": 292219,
+      "end_ms": 299019,
+      "duration_ms": 6800,
+      "text": "六年四十一月讲谈社 乌勧请 改题",
+      "audio_file": "a29ba63a-8b34-4567-bcb4-761bf05faa8d.wav"
+    },
+    {
+      "id": 43,
+      "speaker_id": "913",
+      "speaker_name": "高娜",
+      "start_ms": 299519,
+      "end_ms": 305519,
+      "duration_ms": 6000,
+      "text": "搜集各地编年史作家的著作 以及分散于各地的异教的故事",
+      "audio_file": "3fcd4e04-28a1-474c-8d33-1ec8ee03ffdc.wav"
+    },
+    {
+      "id": 44,
+      "speaker_id": "913",
+      "speaker_name": "高娜",
+      "start_ms": 306019,
+      "end_ms": 309619,
+      "duration_ms": 3600,
+      "text": "在人民反美斗争的推动下颁布了新宪法",
+      "audio_file": "9f77177a-0755-4608-bb93-d4affaf33974.wav"
+    },
+    {
+      "id": 45,
+      "speaker_id": "1149",
+      "speaker_name": "梁飞",
+      "start_ms": 310119,
+      "end_ms": 316719,
+      "duration_ms": 6600,
+      "text": "一九九七年 注册中文 劲霸 英文 减 及图形商标",
+      "audio_file": "e9fe6757-01bf-481f-99bc-1e5aa15766db.wav"
+    },
+    {
+      "id": 46,
+      "speaker_id": "967",
+      "speaker_name": "朱刚",
+      "start_ms": 317219,
+      "end_ms": 324059,
+      "duration_ms": 6840,
+      "text": "故名说经因起分也 婆离见悕记相 复念往昔佛言",
+      "audio_file": "1f6ed06f-eced-4365-8dea-ac93b8344ee9.wav"
+    },
+    {
+      "id": 47,
+      "speaker_id": "780",
+      "speaker_name": "郭琪",
+      "start_ms": 324559,
+      "end_ms": 331999,
+      "duration_ms": 7440,
+      "text": "被河南省委组织部命名为 全省先进五好村党支部",
+      "audio_file": "84d0e4d1-e339-450d-834d-439df3f869c6.wav"
+    },
+    {
+      "id": 48,
+      "speaker_id": "780",
+      "speaker_name": "郭琪",
+      "start_ms": 332499,
+      "end_ms": 339339,
+      "duration_ms": 6840,
+      "text": "有人用两个卵母细胞融合后产生的胞质作为进行各代核移植",
+      "audio_file": "6195f912-0996-4942-85bc-60404ef77c45.wav"
+    },
+    {
+      "id": 49,
+      "speaker_id": "913",
+      "speaker_name": "高娜",
+      "start_ms": 339839,
+      "end_ms": 346799,
+      "duration_ms": 6960,
+      "text": "起于纳雍县龙场枢纽互通 经化作 董地 东关",
+      "audio_file": "a52beba0-fc13-400f-b4ad-dafb5d59ead4.wav"
+    },
+    {
+      "id": 50,
+      "speaker_id": "1082",
+      "speaker_name": "黄秀珍",
+      "start_ms": 347299,
+      "end_ms": 356599,
+      "duration_ms": 9300,
+      "text": "主要账务处理为 借 信用证存款财务费用贷",
+      "audio_file": "027575df-106e-4e1b-a021-9d556c360b51.wav"
+    },
+    {
+      "id": 51,
+      "speaker_id": "780",
+      "speaker_name": "郭琪",
+      "start_ms": 357099,
+      "end_ms": 362259,
+      "duration_ms": 5160,
+      "text": "致力于高标准 高质量 普九 努力实现教育投入",
+      "audio_file": "4001349c-eab6-4818-a80d-17f2333d3ee1.wav"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "generated_at": "2026-05-16T19:12:45.155684",
+  "timestamp": "20260516_191245",
+  "num_speakers": 4,
+  "random_seed": 123,
+  "speakers": [
+    {
+      "speaker_id": "1034",
+      "name": "何鹏",
+      "num_segments": 9
+    },
+    {
+      "speaker_id": "1153",
+      "name": "王丽",
+      "num_segments": 5
+    },
+    {
+      "speaker_id": "1049",
+      "name": "杨艳",
+      "num_segments": 5
+    },
+    {
+      "speaker_id": "791",
+      "name": "孙明",
+      "num_segments": 7
+    }
+  ]
+}

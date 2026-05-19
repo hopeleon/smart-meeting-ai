@@ -54,18 +54,13 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str):
     """
     WebSocket 端点：ws://host/ws/meeting/{meeting_id}
 
+    接收来自前端的音频流（audio_chunk），调用 VAD + ASR 管道处理，
+    然后通过 broadcast 向所有连接推送转写结果。
+
     推送消息格式：
     - {"type": "transcript", "data": TranscriptSegment}
     - {"type": "period_summary", "data": PeriodSummary}
     - {"type": "meeting_status", "data": {"status": "recording"|"paused"|"ended"}}
     """
-    await manager.connect(meeting_id, websocket)
-    try:
-        while True:
-            # 保持连接，接收客户端消息（如心跳）
-            data = await websocket.receive_text()
-            # 客户端可发送 ping 消息
-            if data == "ping":
-                await websocket.send_text("pong")
-    except WebSocketDisconnect:
-        manager.disconnect(meeting_id, websocket)
+    from app.asr.realtime_ws_handler import handle_meeting_websocket
+    await handle_meeting_websocket(websocket, meeting_id)

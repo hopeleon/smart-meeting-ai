@@ -12,3 +12,14 @@ httpx==0.27.0
 python-multipart==0.0.9
 websockets==12.0
 python-dotenv==1.0.1
+
+# ── 本地 ASR / VAD / 声纹模型 ─────────────────────
+# PyTorch CUDA（需要 CUDA 12.1）
+torch>=2.0.0
+torchaudio>=2.0.0
+# FunASR（含 Paraformer-large ASR + CAM++ 声纹）
+funasr>=1.0.0
+# 声纹处理
+numpy>=1.24.0
+soundfile>=0.12.0
+scipy>=1.11.0

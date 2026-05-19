@@ -3,6 +3,7 @@ import PageLayout from './components/layout/PageLayout'
 import HomePage from './pages/HomePage'
 import MeetingActivePage from './pages/MeetingActivePage'
 import MeetingSummaryPage from './pages/MeetingSummaryPage'
+import SpeakerDbPage from './pages/SpeakerDbPage'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
           <Route path="/meeting/:meetingId" element={<MeetingActivePage />} />
           <Route path="/meeting/:meetingId/summary" element={<MeetingSummaryPage />} />
         </Route>
+        <Route path="/speakers" element={<SpeakerDbPage />} />
       </Routes>
     </BrowserRouter>
   )

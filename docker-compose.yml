@@ -37,6 +37,8 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./backend/data:/app/data
+      - ./models:/app/models:ro
       - audio_data:/app/audio_files
     depends_on:
       postgres:
@@ -52,6 +54,8 @@ services:
     env_file: .env
     volumes:
       - ./backend:/app
+      - ./backend/data:/app/data
+      - ./models:/app/models:ro
       - audio_data:/app/audio_files
     depends_on:
       postgres:
