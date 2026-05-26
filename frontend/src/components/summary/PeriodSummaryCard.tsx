@@ -1,8 +1,8 @@
 import type { PeriodSummary } from '../../types/meeting'
 
 export default function PeriodSummaryCard({ summary }: { summary: PeriodSummary }) {
-  const minutes = Math.floor(summary.period_start / 60)
-  const seconds = Math.floor(summary.period_start % 60)
+  const minutes = Math.floor(summary.period_end / 60)
+  const seconds = Math.floor(summary.period_end % 60)
   const timeLabel = `${minutes}:${seconds.toString().padStart(2, '0')}`
 
   return (

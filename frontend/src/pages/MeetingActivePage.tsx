@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMeetingStore } from '../stores/meetingStore'
 import { useAudioStore } from '../stores/audioStore'
-import { getMeeting, updateMeetingStatus } from '../api/meetings'
+import { getMeeting, updateMeetingStatus, checkBackendHealth, type ModelStatus } from '../api/meetings'
 import { MeetingWebSocket } from '../api/websocket'
 import TranscriptList from '../components/transcript/TranscriptList'
 import PeriodSummaryCard from '../components/summary/PeriodSummaryCard'
@@ -66,6 +66,7 @@ export default function MeetingActivePage() {
   const { isRecording, reset: resetAudio } = useAudioStore()
   const wsRef = useRef<MeetingWebSocket | null>(null)
   const [wsReady, setWsReady] = useState(false)
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null)
 
   useEffect(() => {
     if (!meetingId) return
@@ -94,6 +95,10 @@ export default function MeetingActivePage() {
           if (segment) addTranscript(segment)
         } else if (msg.type === 'period_summary' || msg.type === 'period_summary_update') {
           addPeriodSummary((m.data || msg) as Parameters<typeof addPeriodSummary>[0])
+        } else if (msg.type === 'final_summary') {
+          // 最终总结已完成，跳转到总结页面
+          console.log('[会议状态] 最终总结已生成，正在跳转...')
+          navigate(`/meeting/${meetingId}/summary`)
         } else if (msg.type === 'meeting_status') {
           const status = (m.status as string) || ((m.data as Record<string, unknown>)?.status as string)
           console.log('[会议状态]', status)
@@ -142,6 +147,24 @@ export default function MeetingActivePage() {
       return () => clearTimeout(timer)
     }
   }, [wsReady, navigate, resetAudio])
+
+  // 检查后端模型加载状态
+  useEffect(() => {
+    if (!meetingId) return
+    checkBackendHealth().then((status) => {
+      setModelStatus(status)
+      if (status) {
+        const loaded = [status.models.funasr, status.models.vad, status.models.campplus]
+        if (!loaded.every(Boolean)) {
+          console.warn('[模型状态]', status.models)
+        } else {
+          console.log('[模型状态] 所有模型已就绪:', status.models)
+        }
+      } else {
+        console.warn('[模型状态] 无法获取后端健康状态')
+      }
+    })
+  }, [meetingId])
 
   const handleEndMeeting = async () => {
     if (!meetingId) return
@@ -214,12 +237,19 @@ export default function MeetingActivePage() {
 
       {/* 底部控制栏 */}
       <div className="mt-4 glass rounded-xl px-6 py-4 flex items-center gap-6">
-        {/* WebSocket 连接状态指示器 */}
+        {/* WebSocket + 模型加载状态指示器 */}
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${wsReady ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`} />
           <span className="text-xs text-gray-400">
             {wsReady ? '已连接' : '连接中...'}
           </span>
+          {modelStatus && (
+            <span className="text-xs text-gray-500 ml-1">
+              {modelStatus.models.funasr ? '✓ASR' : '✗ASR'}
+              {modelStatus.models.vad ? ' ✓VAD' : ' ✗VAD'}
+              {modelStatus.models.campplus ? ' ✓声纹' : ' ✗声纹'}
+            </span>
+          )}
         </div>
         <RecordingControls meetingId={meetingId!} ws={wsRef.current} />
         <WaveformVisualizer />

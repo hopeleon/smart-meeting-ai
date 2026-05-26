@@ -24,3 +24,23 @@ export async function updateMeetingStatus(meetingId: string, status: string): Pr
 export async function deleteMeeting(meetingId: string): Promise<void> {
   await apiClient.delete(`/meetings/${meetingId}`)
 }
+
+export interface ModelStatus {
+  status: string
+  env: string
+  models: {
+    funasr: boolean
+    vad: boolean
+    campplus: boolean
+    campplus_en: boolean
+  }
+}
+
+export async function checkBackendHealth(): Promise<ModelStatus | null> {
+  try {
+    const resp = await apiClient.get<ModelStatus>('/health')
+    return resp.data
+  } catch {
+    return null
+  }
+}

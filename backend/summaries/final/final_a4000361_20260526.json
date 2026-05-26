@@ -1,0 +1,23 @@
+{
+  "tldr": "本次会议内容杂乱，包含大量不相关的片段，如道教名山、毛竹林基地、体育赛事、医疗影像、太空垃圾等，缺乏连贯的讨论主题和明确的决策。会议未形成任何有效决议或行动项，主要是一些零散信息的罗列。",
+  "meeting": {
+    "title": "杂乱信息汇总会议",
+    "date": "N/A",
+    "time": "N/A",
+    "location": "N/A",
+    "host": "N/A",
+    "attendees": [],
+    "agenda": [],
+    "meeting_type": "其他"
+  },
+  "discussion_points": [],
+  "decisions": [],
+  "action_items": [],
+  "issues_risks": [],
+  "next_meeting": {
+    "date": "TBD",
+    "time": "TBD",
+    "location": "TBD",
+    "tentative_agenda": "TBD"
+  }
+}

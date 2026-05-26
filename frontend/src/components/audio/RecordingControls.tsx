@@ -1,12 +1,14 @@
 /**
  * 会议录音控制器
- * 对齐 InsightEye 模式二音频管线:
- *   MediaStream → AudioContext → createScriptProcessor → downsample to 16kHz → PCM 16bit base64
  *
- * 使用 createScriptProcessor（对齐 InsightEye），在 onaudioprocess 中直接处理音频数据。
+ * 音频管线（Primary - MediaRecorder）:
+ *   MediaStream → MediaRecorder → audio/webm blob → queue → decode → PCM 16bit base64 → WebSocket
+ *
+ * 音频管线（Fallback - createScriptProcessor）:
+ *   MediaStream → AudioContext → createScriptProcessor → downsample 16kHz → PCM 16bit base64 → WebSocket
  */
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useAudioStore, type AudioSource } from '../../stores/audioStore'
 import { MeetingWebSocket } from '../../api/websocket'
 
@@ -18,7 +20,8 @@ interface Props {
 
 const OUTPUT_SAMPLE_RATE = 16000
 
-// 诊断函数：列出可用的音频设备
+// ─── 诊断 ───────────────────────────────────────────────────────────────────
+
 export async function listAudioDevices(): Promise<void> {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices()
@@ -43,22 +46,91 @@ export async function listAudioDevices(): Promise<void> {
   }
 }
 
+// ─── 工具函数 ────────────────────────────────────────────────────────────────
+
+function floatTo16BitPcm(floatBuffer: Float32Array): Int16Array {
+  const pcm = new Int16Array(floatBuffer.length)
+  for (let i = 0; i < floatBuffer.length; i++) {
+    const sample = Math.max(-1, Math.min(1, floatBuffer[i]))
+    pcm[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff
+  }
+  return pcm
+}
+
+function downsampleBuffer(buffer: Float32Array, inputRate: number, outputRate: number): Float32Array {
+  if (inputRate === outputRate) return buffer
+  const ratio = inputRate / outputRate
+  const outputLength = Math.round(buffer.length / ratio)
+  const output = new Float32Array(outputLength)
+  let offsetResult = 0
+  let offsetBuffer = 0
+  while (offsetResult < output.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio)
+    let accum = 0
+    let count = 0
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+      accum += buffer[i]
+      count += 1
+    }
+    output[offsetResult] = count ? accum / count : 0
+    offsetResult += 1
+    offsetBuffer = nextOffsetBuffer
+  }
+  return output
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return btoa(binary)
+}
+
+// WebM/Opus → PCM 16kHz mono Float32Array
+async function decodeWebmToPcm16k(blob: Blob, _targetSampleRate: number): Promise<Float32Array | null> {
+  const arrayBuffer = await blob.arrayBuffer()
+  // AudioContext 不强制 sampleRate，由浏览器使用原生采样率解码
+  const audioContext = new AudioContext()
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+    const nativeRate = audioBuffer.sampleRate
+    const channelData = audioBuffer.getChannelData(0)
+    // 解码后手动下采样到 16kHz
+    const downsampled = downsampleBuffer(channelData, nativeRate, OUTPUT_SAMPLE_RATE)
+    return downsampled
+  } catch (err) {
+    // 解码失败（通常是 WebM 数据不完整），跳过此 chunk
+    console.warn('[Recording] WebM 解码失败，跳过:', (err as Error).message)
+    return null
+  } finally {
+    await audioContext.close()
+  }
+}
+
+// ─── 清理函数类型 ────────────────────────────────────────────────────────────
+
+type CleanupFn = () => void
+
+// ─── 主组件 ─────────────────────────────────────────────────────────────────
+
 export default function RecordingControls({ meetingId, ws, onWsReady }: Props) {
   const { isRecording, isPaused, audioSource, setRecording, setPaused, setAudioSource, setVolume } = useAudioStore()
 
-  const micStreamRef = useRef<MediaStream | null>(null)
-  const systemStreamRef = useRef<MediaStream | null>(null)
   const activeWsRef = useRef<MeetingWebSocket | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
   const [sourceLabel, setSourceLabel] = useState('麦克风')
-  const [audioLevel, setAudioLevel] = useState(0)  // 本地显示用
-  const cleanupRef = useRef<(() => void) | null>(null)
-  // 保存 processor/analyser 节点用于清理
-  const nodesRef = useRef<{ source?: MediaStreamAudioSourceNode; processor?: ScriptProcessorNode; analyser?: AnalyserNode }>({})
-  // 暂停标记 ref，避免闭包延迟问题
-  const pausedRef = useRef(false)
-  // 是否已暂停（控制按钮文字）
+  const [audioLevel, setAudioLevel] = useState(0)
+  const [micError, setMicError] = useState<string | null>(null)
   const [localPaused, setLocalPaused] = useState(false)
+
+  // 录制管线状态
+  const cleanupRef = useRef<CleanupFn | null>(null)
+  const pausedRef = useRef(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const micStreamRef = useRef<MediaStream | null>(null)
+  const chunkCountRef = useRef(0)
 
   useEffect(() => {
     if (ws) {
@@ -66,6 +138,7 @@ export default function RecordingControls({ meetingId, ws, onWsReady }: Props) {
       console.log('[RecordingControls] ws 已设置，readyState=', ws.readyState)
       onWsReady?.(ws)
     } else {
+      activeWsRef.current = null
       console.log('[RecordingControls] ws prop 为 null')
     }
   }, [ws, onWsReady])
@@ -75,273 +148,390 @@ export default function RecordingControls({ meetingId, ws, onWsReady }: Props) {
     setSourceLabel(labels[audioSource])
   }, [audioSource])
 
-  // 对齐 InsightEye 的下采样函数
-  const downsampleBuffer = (buffer: Float32Array, inputRate: number, outputRate: number): Float32Array => {
-    if (inputRate === outputRate) return buffer
-    const ratio = inputRate / outputRate
-    const outputLength = Math.round(buffer.length / ratio)
-    const output = new Float32Array(outputLength)
-    let offsetResult = 0
-    let offsetBuffer = 0
-    while (offsetResult < output.length) {
-      const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio)
-      let accum = 0
-      let count = 0
-      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
-        accum += buffer[i]
-        count += 1
+  // ─── 清理所有音频资源 ───────────────────────────────────────────────────
+  const cleanupAll = useCallback(() => {
+    if (cleanupRef.current) {
+      cleanupRef.current()
+      cleanupRef.current = null
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current = null
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {})
+      audioContextRef.current = null
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(t => t.stop())
+      micStreamRef.current = null
+    }
+    setAudioLevel(0)
+  }, [])
+
+  // ─── 获取麦克风 MediaStream ─────────────────────────────────────────────
+  const getMicStream = async (): Promise<MediaStream> => {
+    // 查询权限状态
+    let permissionState: PermissionState = 'prompt'
+    try {
+      const result = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+      permissionState = result.state
+      console.log('[Recording] 麦克风权限状态:', result.state)
+      if (result.state === 'denied') {
+        alert('麦克风权限已被拒绝。\n\n请在浏览器地址栏左侧点击🔒图标，\n将"麦克风"权限改为"允许"，然后刷新页面重试。')
+        throw new Error('PermissionDenied')
       }
-      output[offsetResult] = count ? accum / count : 0
-      offsetResult += 1
-      offsetBuffer = nextOffsetBuffer
+    } catch (permErr) {
+      console.warn('[Recording] 无法查询权限状态，继续尝试获取:', permErr)
     }
-    return output
+
+    // 优先：带高级约束（回退到简单约束）
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true },
+          channelCount: { ideal: 1, max: 1 },
+          sampleRate: { ideal: 16000 },
+        },
+      })
+      console.log('[Recording] 麦克风已获取（高级约束），轨道数:', stream.getAudioTracks().length)
+    } catch {
+      console.log('[Recording] 高级约束失败，尝试简化约束...')
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      console.log('[Recording] 麦克风已获取（简化约束），轨道数:', stream.getAudioTracks().length)
+    }
+
+    // 请求标签（需要用户已授权）
+    const track = stream.getAudioTracks()[0]
+    if (track) {
+      try {
+        const capabilities = track.getCapabilities?.() as MediaTrackCapabilities & { sampleRate?: { max: number } }
+        console.log('[Recording] 麦克风能力:', JSON.stringify(capabilities))
+        const settings = track.getSettings()
+        console.log('[Recording] 麦克风设置:', JSON.stringify(settings))
+      } catch {
+        // 某些浏览器不支持 getCapabilities
+      }
+    }
+
+    return stream
   }
 
-  // 对齐 InsightEye 的 floatTo16BitPCM + bytesToBase64
-  const bytesToBase64 = (bytes: Uint8Array): string => {
-    let binary = ''
-    const chunkSize = 0x8000
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  // ─── Modern: MediaRecorder 管线（queue-based，无 chunk 丢失）────────────
+  const startModernPipeline = async (stream: MediaStream): Promise<void> => {
+    console.log('[Recording] 启动 MediaRecorder 管线...')
+
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : 'audio/ogg'
+    console.log('[Recording] 使用 MIME 类型:', mimeType)
+
+    const recorder = new MediaRecorder(stream, { mimeType })
+    mediaRecorderRef.current = recorder
+
+    let wsWrapper = activeWsRef.current
+    if (!wsWrapper) throw new Error('WebSocket 未就绪')
+
+    const audioContext = new AudioContext({ sampleRate: OUTPUT_SAMPLE_RATE })
+    audioContextRef.current = audioContext
+
+    const chunkQueue: Blob[] = []
+    let isProcessingQueue = false
+
+    const processQueue = async () => {
+      if (isProcessingQueue || pausedRef.current || chunkQueue.length === 0) return
+      isProcessingQueue = true
+
+      while (chunkQueue.length > 0 && !pausedRef.current) {
+        const blob = chunkQueue.shift()!
+        try {
+          const floatSamples = await decodeWebmToPcm16k(blob, OUTPUT_SAMPLE_RATE)
+          if (!floatSamples || floatSamples.length === 0) continue
+
+          let sum = 0
+          for (let i = 0; i < floatSamples.length; i++) sum += floatSamples[i] * floatSamples[i]
+          const energy = sum / floatSamples.length
+          const level = Math.min(1, Math.sqrt(energy) * 5)
+          setAudioLevel(level)
+          setVolume(level)
+
+          const pcm = floatTo16BitPcm(floatSamples)
+          const base64 = bytesToBase64(new Uint8Array(pcm.buffer))
+          chunkCountRef.current++
+          wsWrapper?.sendAudioChunk('mic', base64)
+          if (chunkCountRef.current <= 5) {
+            console.log(`[Recording] 发送 chunk #${chunkCountRef.current}, 大小=${base64.length}`)
+          }
+        } catch (err) {
+          console.warn('[Recording] 处理 chunk 失败:', err)
+        }
+      }
+
+      isProcessingQueue = false
+      if (chunkQueue.length > 0) {
+        setTimeout(processQueue, 50)
+      }
     }
-    return btoa(binary)
+
+    // MediaRecorder 每次 ondataavailable 触发（~1秒一个 chunk）
+    recorder.ondataavailable = async (event) => {
+      if (!event.data || event.data.size === 0) return
+      chunkQueue.push(event.data)
+      processQueue()
+    }
+
+    recorder.start(1000) // 每 1 秒触发一次 ondataavailable
+    console.log('[Recording] MediaRecorder 已启动，state=', recorder.state)
+
+    cleanupRef.current = () => {
+      console.log('[Recording] 清理 MediaRecorder 管线...')
+      chunkQueue.length = 0
+      recorder.ondataavailable = null
+      if (recorder.state !== 'inactive') recorder.stop()
+      mediaRecorderRef.current = null
+      if (audioContext.state !== 'closed') audioContext.close()
+      audioContextRef.current = null
+      stream.getTracks().forEach(t => t.stop())
+      micStreamRef.current = null
+      setAudioLevel(0)
+    }
   }
 
-  const floatTo16BitPCM = (floatBuffer: Float32Array): Uint8Array => {
-    const pcm = new Int16Array(floatBuffer.length)
-    for (let i = 0; i < floatBuffer.length; i++) {
-      const sample = Math.max(-1, Math.min(1, floatBuffer[i]))
-      pcm[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff
+  // ─── Legacy: createScriptProcessor 管线（备用）──────────────────────────
+  const startLegacyPipeline = async (stream: MediaStream): Promise<void> => {
+    console.log('[Recording] 启动 createScriptProcessor 管线（备用）...')
+
+    let audioContext = audioContextRef.current
+    if (!audioContext) audioContext = new AudioContext()
+    else if (audioContext.state === 'suspended') await audioContext.resume()
+    audioContextRef.current = audioContext
+
+    const sourceNode = audioContext.createMediaStreamSource(stream)
+    const analyser = audioContext.createAnalyser()
+    analyser.fftSize = 2048
+    sourceNode.connect(analyser)
+
+    const processor = audioContext.createScriptProcessor(512, 1, 1)
+
+    processor.onaudioprocess = (event) => {
+      if (pausedRef.current) return
+
+      const input = event.inputBuffer.getChannelData(0)
+
+      let sum = 0
+      for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
+      const energy = sum / input.length
+      const level = Math.min(1, Math.sqrt(energy) * 5)
+      setAudioLevel(level)
+      setVolume(level)
+
+      const downsampled = downsampleBuffer(input, audioContext.sampleRate, OUTPUT_SAMPLE_RATE)
+      if (!downsampled.length) return
+
+      const pcm = floatTo16BitPcm(downsampled)
+      const base64 = bytesToBase64(new Uint8Array(pcm.buffer))
+
+      chunkCountRef.current++
+      activeWsRef.current?.sendAudioChunk('mic', base64)
+      if (chunkCountRef.current <= 5) {
+        console.log(`[Recording] 发送 chunk #${chunkCountRef.current}, 大小=${base64.length}`)
+      }
     }
-    return new Uint8Array(pcm.buffer)
+
+    sourceNode.connect(processor)
+    processor.connect(audioContext.destination)
+
+    cleanupRef.current = () => {
+      console.log('[Recording] 清理 createScriptProcessor 管线...')
+      try { sourceNode.disconnect(); analyser.disconnect(); processor.disconnect() } catch (_) {}
+      processor.onaudioprocess = null
+      if (audioContext.state !== 'closed') audioContext.close()
+      audioContextRef.current = null
+      stream.getTracks().forEach(t => t.stop())
+      micStreamRef.current = null
+      setAudioLevel(0)
+    }
   }
 
-  // 对齐 InsightEye 的 getRequestedAudioStreams：等 WebSocket OPEN 后才采集
+  // ─── 开始录制 ────────────────────────────────────────────────────────────
   const handleStart = async () => {
-    // 获取最新的 audioSource 状态（不从闭包获取）
+    setMicError(null)
     const currentAudioSource = useAudioStore.getState().audioSource
-    console.log('[Recording] 开始录制，当前 audioSource:', currentAudioSource)
+    console.log('[Recording] 开始录制，audioSource:', currentAudioSource)
 
     try {
-      // 先获取麦克风权限（不等待 WebSocket），让用户能立即看到权限弹窗
-      const combinedStream = new MediaStream()
-
-      // 只有在选择麦克风时才检查/请求麦克风权限
+      // ── 1. 获取麦克风 ──────────────────────────────────────────────
+      let stream: MediaStream
       if (currentAudioSource === 'mic') {
-        // 先检查麦克风权限状态
-        let permissionState: PermissionState = 'prompt'
         try {
-          const result = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-          permissionState = result.state
-          console.log('[Recording] 麦克风权限状态:', result.state)
-          if (result.state === 'denied') {
-            alert('麦克风权限已被拒绝。\n\n请在浏览器地址栏左侧点击🔒或🔒图标，\n将"麦克风"权限改为"允许"，然后刷新页面重试。')
-            return
-          }
-          if (result.state === 'prompt') {
-            // 权限需要用户授权，会自动弹出提示
-          }
-        } catch (permErr) {
-          console.warn('[Recording] 无法查询权限状态，继续尝试获取:', permErr)
-        }
-
-        try {
-          const constraints: MediaStreamConstraints = {
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-          }
-          console.log('[Recording] 请求麦克风约束:', JSON.stringify(constraints.audio))
-          const micStream = await navigator.mediaDevices.getUserMedia(constraints)
-          micStream.getAudioTracks().forEach((t) => combinedStream.addTrack(t))
-          micStreamRef.current = micStream
-          console.log('[Recording] 麦克风已获取，轨道数:', micStream.getAudioTracks().length)
-        } catch (micErr: unknown) {
-          const err = micErr as Error & { name?: string; message?: string }
-          const errName = err?.name || 'UnknownError'
-          const errMsg = err?.message || ''
-          console.error('[Recording] 麦克风获取失败:', errName, errMsg)
-
-          let title = '麦克风获取失败'
-          let hint = ''
-          if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
-            hint = '\n\n解决方法：\n1. 检查浏览器地址栏左侧的麦克风/摄像头图标，点击"允许"\n2. 或者点击地址栏左侧的🔒图标 → 权限 → 麦克风 → 设为"允许"\n3. 刷新页面后重试'
-          } else if (errName === 'NotFoundError') {
-            hint = '\n\n解决方法：\n1. 确认系统已连接麦克风（可在系统设置中测试）\n2. 检查是否有其他程序正在使用麦克风\n3. 如果是浏览器标签页正在使用，关闭该标签页'
-          } else if (errName === 'NotReadableError' || errName === 'DeviceInUseError') {
-            hint = '\n\n解决方法：\n麦克风正被其他程序占用。请关闭占用麦克风的程序后重试：\n- 视频通话软件（微信、QQ、Zoom等）\n- 其他使用麦克风的浏览器标签页\n- 录音软件'
-          } else if (errName === 'OverconstrainedError') {
-            hint = '\n\n解决方法：\n当前浏览器不支持这些音频参数。正在尝试简化参数重试...'
-            try {
-              const micStreamSimple = await navigator.mediaDevices.getUserMedia({ audio: true })
-              micStreamSimple.getAudioTracks().forEach((t) => combinedStream.addTrack(t))
-              micStreamRef.current = micStreamSimple
-              console.log('[Recording] 简化参数麦克风获取成功，轨道数:', micStreamSimple.getAudioTracks().length)
-            } catch {
-              alert(title + hint)
-              return
-            }
-            return
-          } else if (errName === 'NotSupportedError') {
-            hint = '\n\n解决方法：\n请使用支持的浏览器：Chrome、Edge、Firefox、Safari'
-          } else if (errName === 'SecurityError') {
-            hint = '\n\n解决方法：\n麦克风功能需要在安全上下文（HTTPS）或 localhost 下运行\n如果您使用的是 HTTP，请切换到 HTTPS 或使用 localhost'
-          } else {
-            hint = `\n\n技术信息: ${errName}\n${errMsg}`
-          }
-          alert(title + hint)
+          stream = await getMicStream()
+          micStreamRef.current = stream
+        } catch (err) {
+          const e = err as Error
+          if (e.message === 'PermissionDenied') return
+          handleMicError(err as Error)
           return
         }
-      } else if (currentAudioSource === 'system') {
+      } else {
+        // 系统音频
         try {
-          const displayStream = await navigator.mediaDevices.getDisplayMedia({ audio: true })
-          const audioTracks = displayStream.getAudioTracks()
+          stream = await navigator.mediaDevices.getDisplayMedia({ audio: true }) as MediaStream
+          const audioTracks = stream.getAudioTracks()
           if (!audioTracks.length) throw new Error('No system audio track was shared.')
-          const systemStream = new MediaStream(audioTracks)
-          systemStreamRef.current = systemStream
-          audioTracks.forEach((t) => combinedStream.addTrack(t))
           console.log('[Recording] 系统音频已获取，轨道数:', audioTracks.length, '| 设备:', audioTracks[0].label)
-        } catch (sysErr: unknown) {
+        } catch (sysErr) {
           const err = sysErr as Error & { name?: string }
-          if (err?.name === 'NotAllowedError') alert('系统音频权限被拒绝，请在弹窗中选择标签页/窗口并开启"分享音频"选项。')
-          else if (err?.name === 'NotFoundError') alert('未找到音频设备，请确保选择了标签页（而非整个屏幕）并开启音频选项。')
-          else alert(`系统音频获取失败: ${err?.message || err}`)
-          if (micStreamRef.current) { micStreamRef.current.getAudioTracks().forEach((t) => t.stop()); micStreamRef.current = null }
+          if (err?.name === 'NotAllowedError') {
+            alert('系统音频权限被拒绝，请在弹窗中选择标签页/窗口并开启"分享音频"选项。')
+          } else if (err?.name === 'NotFoundError') {
+            alert('未找到音频设备，请确保选择了标签页（而非整个屏幕）并开启音频选项。')
+          } else {
+            alert(`系统音频获取失败: ${err?.message || err}`)
+          }
           return
         }
       }
 
-      if (combinedStream.getAudioTracks().length === 0) {
-        alert('没有可用的音频轨道，请检查麦克风权限。')
+      if (stream.getAudioTracks().length === 0) {
+        setMicError('没有可用的音频轨道，请检查麦克风权限。')
         return
       }
 
-      // 获取权限后再检查 WebSocket 状态
+      // ── 2. 检查 WebSocket ─────────────────────────────────────────
       const currentWs = activeWsRef.current
       if (!currentWs) {
-        // 释放已获取的麦克风
-        combinedStream.getAudioTracks().forEach((t) => t.stop())
-        alert('WebSocket 尚未连接，请稍等...')
+        stream.getTracks().forEach(t => t.stop())
+        setMicError('WebSocket 尚未连接，请稍等...')
         return
       }
       if (currentWs.readyState !== WebSocket.OPEN) {
-        combinedStream.getAudioTracks().forEach((t) => t.stop())
-        alert(`WebSocket 尚未就绪 (状态=${currentWs.readyState})，请等待连接建立后再试。`)
+        stream.getTracks().forEach(t => t.stop())
+        setMicError(`WebSocket 尚未就绪 (状态=${currentWs.readyState})，请等待连接建立后再试。`)
         return
       }
 
       console.log('[Recording] WebSocket 已就绪 (OPEN)，开始采集音频...')
 
-      // 对齐 InsightEye：使用 AudioContext（不过度约束），确保 resumed 状态
-      let audioContext = audioContextRef.current
-      if (!audioContext) audioContext = new AudioContext()
-      else if (audioContext.state === 'suspended') await audioContext.resume()
-      audioContextRef.current = audioContext
-      console.log('[Recording] AudioContext 状态:', audioContext.state, '采样率:', audioContext.sampleRate)
-
-      // 对齐 InsightEye：createMediaStreamSource → createAnalyser → createScriptProcessor
-      const sourceNode = audioContext.createMediaStreamSource(combinedStream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 2048
-      sourceNode.connect(analyser)
-
-      const processor = audioContext.createScriptProcessor(512, 1, 1)
-
-      let chunkNum = 0
-      processor.onaudioprocess = (event) => {
-        const input = event.inputBuffer.getChannelData(0)
-
-        // 实时计算能量，更新音量电平（暂停时也显示静音量表）
-        let sum = 0
-        for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
-        const energy = sum / input.length
-        const level = Math.min(1, Math.sqrt(energy) * 5)
-        setAudioLevel(level)
-        setVolume(level)
-
-        // 暂停时不再发送音频
-        if (pausedRef.current) return
-
-        chunkNum++
-        const downsampled = downsampleBuffer(input, audioContext.sampleRate, OUTPUT_SAMPLE_RATE)
-        if (!downsampled.length) return
-
-        // 对齐 InsightEye：downsampled → PCM 16bit → base64 → WebSocket
-        const pcmBytes = floatTo16BitPCM(downsampled)
-        const base64 = bytesToBase64(pcmBytes)
-
-        const wsWrapper = activeWsRef.current
-        if (!wsWrapper) return
-
-        // 使用 currentAudioSource 而不是闭包中的 audioSource
-        wsWrapper.sendAudioChunk(currentAudioSource, base64)
-      }
-
-      // 对齐 InsightEye：source → analyser → processor → destination
-      sourceNode.connect(processor)
-      processor.connect(audioContext.destination)
-
-      // 保存节点引用用于清理
-      nodesRef.current = { source: sourceNode, processor, analyser }
-
-      cleanupRef.current = () => {
-        console.log('[Recording] 清理音频管线...')
+      // ── 3. 尝试 MediaRecorder，不支持则降级到 createScriptProcessor ──
+      if (typeof MediaRecorder !== 'undefined') {
         try {
-          sourceNode.disconnect()
-          analyser.disconnect()
-          processor.disconnect()
-          processor.onaudioprocess = null
-        } catch (_) {}
-        if (audioContext.state !== 'closed') audioContext.close()
-        audioContextRef.current = null
-        nodesRef.current = {}
-        setAudioLevel(0)
+          await startModernPipeline(stream)
+          console.log('[Recording] 使用 MediaRecorder 管线')
+        } catch (mrErr) {
+          console.warn('[Recording] MediaRecorder 失败，降级到 createScriptProcessor:', mrErr)
+          cleanupAll()
+          try {
+            await startLegacyPipeline(stream)
+          } catch (legacyErr) {
+            handleMicError(legacyErr as Error)
+            return
+          }
+        }
+      } else {
+        // MediaRecorder 不可用，直接用 createScriptProcessor
+        await startLegacyPipeline(stream)
       }
-
-      if (!activeWsRef.current) console.warn('[Recording] WebSocket 未就绪，音频将无法发送')
 
       setRecording(true)
       setPaused(false)
+      setMicError(null)
     } catch (err) {
-      const error = err as Error
-      console.error('[Recording] 无法访问音频设备:', error.name, error.message)
-      alert(`无法访问音频设备 (${error.name}): ${error.message}`)
+      handleMicError(err as Error)
     }
   }
 
+  // ─── 麦克风错误处理 ──────────────────────────────────────────────────────
+  const handleMicError = (err: Error) => {
+    const errName = err?.name || 'UnknownError'
+    const errMsg = err?.message || ''
+    console.error('[Recording] 麦克风获取失败:', errName, errMsg)
+
+    let hint = ''
+    if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+      hint = '麦克风权限被拒绝。请在地址栏左侧点击🔒图标 → 权限 → 麦克风 → 设为"允许"，然后刷新。'
+    } else if (errName === 'NotFoundError') {
+      hint = '未找到麦克风设备。请确认系统已连接麦克风，且没有其他程序正在使用。'
+    } else if (errName === 'NotReadableError' || errName === 'DeviceInUseError') {
+      hint = '麦克风正被其他程序占用（微信、QQ、Zoom等）。请关闭占用程序后重试。'
+    } else if (errName === 'NotSupportedError') {
+      hint = '当前浏览器不支持麦克风录音。请使用 Chrome、Edge、Firefox 或 Safari。'
+    } else if (errName === 'SecurityError') {
+      hint = '麦克风功能需要在安全上下文（HTTPS 或 localhost）下运行。'
+    } else if (errName === 'WebSocket 未就绪') {
+      hint = errMsg
+    } else {
+      hint = `${errName}: ${errMsg}`
+    }
+    setMicError(hint)
+  }
+
+  // ─── 暂停 ────────────────────────────────────────────────────────────────
   const handlePause = () => {
     const nextPaused = !pausedRef.current
     pausedRef.current = nextPaused
     setLocalPaused(nextPaused)
     setPaused(nextPaused)
+    setAudioLevel(0)
     console.log(`[Recording] ${nextPaused ? '暂停' : '继续'}`)
   }
 
+  // ─── 停止 ────────────────────────────────────────────────────────────────
   const handleStop = () => {
     console.log('[Recording] 停止音频处理')
     pausedRef.current = false
     setLocalPaused(false)
-    if (cleanupRef.current) { cleanupRef.current(); cleanupRef.current = null }
-    if (micStreamRef.current) { micStreamRef.current.getAudioTracks().forEach((t) => t.stop()); micStreamRef.current = null }
-    if (systemStreamRef.current) { systemStreamRef.current.getAudioTracks().forEach((t) => t.stop()); systemStreamRef.current = null }
+    chunkCountRef.current = 0
+    cleanupAll()
     setRecording(false)
     setPaused(false)
+    setMicError(null)
   }
 
   const levelWidth = Math.round(audioLevel * 100)
+  const [isAcquiringMic, setIsAcquiringMic] = useState(false)
+
+  // ─── 预检查麦克风权限（不启动录制，仅获取权限）───────────────────────
+  const handlePreCheckMic = async () => {
+    setMicError(null)
+    setIsAcquiringMic(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream.getTracks().forEach(t => t.stop())
+      alert('麦克风正常！可以开始录制。')
+    } catch (err) {
+      handleMicError(err as Error)
+    } finally {
+      setIsAcquiringMic(false)
+    }
+  }
 
   return (
     <div className="flex items-center gap-3">
+      {/* 错误提示（醒目展示） */}
+      {micError && (
+        <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 max-w-sm">
+          <span className="text-red-400 text-sm font-medium">⚠</span>
+          <span className="text-red-300 text-xs leading-relaxed">{micError}</span>
+          <button
+            onClick={() => setMicError(null)}
+            className="text-red-400 hover:text-red-300 text-xs ml-1"
+            title="关闭"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* 音频源选择（录制时隐藏） */}
       {!isRecording && (
         <div className={`flex items-center gap-1 bg-dark-200 rounded-full p-1 ${!ws ? 'opacity-50 pointer-events-none' : ''}`}>
           <button
-            onClick={() => {
-              console.log('[RecordingControls] 点击了麦克风按钮, 当前 audioSource:', useAudioStore.getState().audioSource)
-              setAudioSource('mic')
-            }}
+            onClick={() => setAudioSource('mic')}
             className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
               audioSource === 'mic' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white'
             }`}
@@ -349,15 +539,20 @@ export default function RecordingControls({ meetingId, ws, onWsReady }: Props) {
             麦克风
           </button>
           <button
-            onClick={() => {
-              console.log('[RecordingControls] 点击了系统音频按钮, 当前 audioSource:', useAudioStore.getState().audioSource)
-              setAudioSource('system')
-            }}
+            onClick={() => setAudioSource('system')}
             className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
               audioSource === 'system' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white'
             }`}
           >
             系统音频
+          </button>
+          <button
+            onClick={handlePreCheckMic}
+            disabled={isAcquiringMic}
+            title="先测试麦克风是否可用"
+            className="px-3 py-1.5 rounded-full text-sm text-gray-400 hover:text-white hover:bg-dark-300 transition-colors disabled:opacity-50"
+          >
+            {isAcquiringMic ? '检查中...' : '测试麦克风'}
           </button>
           <button
             onClick={listAudioDevices}
@@ -369,26 +564,31 @@ export default function RecordingControls({ meetingId, ws, onWsReady }: Props) {
         </div>
       )}
 
+      {/* 音量电平 + 管线信息（录制时显示） */}
       {isRecording && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <span className="text-sm text-gray-400">采集: {sourceLabel}</span>
-          <div className="flex items-center gap-1">
-            <div className="w-24 h-2 bg-dark-300 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-75 ${
-                  audioLevel > 0.5 ? 'bg-red-500' : audioLevel > 0.05 ? 'bg-green-500' : 'bg-gray-500'
-                }`}
-                style={{ width: `${levelWidth}%` }}
-              />
-            </div>
+          <div className="w-24 h-2 bg-dark-300 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-75 ${
+                audioLevel > 0.5 ? 'bg-red-500' : audioLevel > 0.05 ? 'bg-green-500' : 'bg-gray-500'
+              }`}
+              style={{ width: `${levelWidth}%` }}
+            />
           </div>
+          <span className="text-xs text-gray-600 font-mono">
+            #{chunkCountRef.current}
+          </span>
         </div>
       )}
 
+      {/* 控制按钮 */}
       {!isRecording ? (
         <button
           onClick={handleStart}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 transition-colors"
+          disabled={!ws || isAcquiringMic}
+          title={!ws ? '等待 WebSocket 连接...' : '开始录制'}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 transition-colors ${!ws || isAcquiringMic ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           <span className="w-3 h-3 bg-white rounded-full" />
           <span className="text-sm font-medium">开始录制</span>

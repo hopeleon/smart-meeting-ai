@@ -82,22 +82,27 @@ async def get_period_summaries(
     meeting_id: str = Path(..., description="会议ID"),
     db: AsyncSession = Depends(get_db),
 ):
+    from datetime import timezone
     result = await db.execute(
         select(PeriodSummary)
         .where(PeriodSummary.meeting_id == meeting_id)
         .order_by(PeriodSummary.period_start)
     )
-    items = [
-        PeriodSummaryResponse(
-            id=s.id,
-            meeting_id=s.meeting_id,
-            period_start=s.period_start,
-            period_end=s.period_end,
-            bullet_points=s.bullet_points,
-            generated_at=s.generated_at,
+    items = []
+    for s in result.scalars().all():
+        gen_at = s.generated_at
+        if gen_at and gen_at.tzinfo is None:
+            gen_at = gen_at.replace(tzinfo=timezone.utc)
+        items.append(
+            PeriodSummaryResponse(
+                id=s.id,
+                meeting_id=s.meeting_id,
+                period_start=s.period_start,
+                period_end=s.period_end,
+                bullet_points=s.bullet_points,
+                generated_at=gen_at,
+            )
         )
-        for s in result.scalars().all()
-    ]
     return PeriodSummaryListResponse(items=items)
 
 
@@ -106,17 +111,21 @@ async def get_final_summary(
     meeting_id: str = Path(..., description="会议ID"),
     db: AsyncSession = Depends(get_db),
 ):
+    from datetime import timezone
     result = await db.execute(
         select(FinalSummary).where(FinalSummary.meeting_id == meeting_id)
     )
     summary = result.scalar_one_or_none()
     if not summary:
         raise HTTPException(status_code=404, detail="Final summary not found")
+    gen_at = summary.generated_at
+    if gen_at and gen_at.tzinfo is None:
+        gen_at = gen_at.replace(tzinfo=timezone.utc)
     return FinalSummaryResponse(
         id=summary.id,
         meeting_id=summary.meeting_id,
         overview=summary.overview,
         key_decisions=summary.key_decisions,
         action_items=summary.action_items,
-        generated_at=summary.generated_at,
+        generated_at=gen_at,
     )

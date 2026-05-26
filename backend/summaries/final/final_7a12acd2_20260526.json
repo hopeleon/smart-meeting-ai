@@ -1,0 +1,23 @@
+{
+  "tldr": "本次会议内容杂乱，包含大量不相关的片段，如道教名山、毛竹林基地、足球运动员、太空船等，无法形成连贯的会议主题。核心产出缺失，无明确决策或行动项。",
+  "meeting": {
+    "title": "N/A",
+    "date": "N/A",
+    "time": "N/A",
+    "location": "N/A",
+    "host": "N/A",
+    "attendees": [],
+    "agenda": [],
+    "meeting_type": "其他"
+  },
+  "discussion_points": [],
+  "decisions": [],
+  "action_items": [],
+  "issues_risks": [],
+  "next_meeting": {
+    "date": "TBD",
+    "time": "TBD",
+    "location": "TBD",
+    "tentative_agenda": "TBD"
+  }
+}

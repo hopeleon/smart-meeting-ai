@@ -98,6 +98,8 @@ export type WebSocketMessage =
   // period_summary
   | { type: 'period_summary'; data: PeriodSummary }
   | { type: 'period_summary_update'; data: PeriodSummary }
+  // final_summary
+  | { type: 'final_summary'; data: FinalSummary }
   // meeting_status
   | { type: 'meeting_status'; data?: { status: string; total_samples?: number }; status?: string }
   // speaker

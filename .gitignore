@@ -49,5 +49,9 @@ logs/
 # Documents
 *.docx
 
+# ML Models (downloaded, large binary files)
+backend/models/
+meetingsummary/models/
+
 # SQLite (local dev)
 *.db

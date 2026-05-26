@@ -39,7 +39,13 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     }),
   setTranscripts: (segments) => set({ transcripts: segments }),
   addPeriodSummary: (summary) =>
-    set((state) => ({ periodSummaries: [...state.periodSummaries, summary] })),
+    set((state) => {
+      const key = summary.id || summary.period_start
+      if (state.periodSummaries.some((s) => (s.id || s.period_start) === key)) {
+        return state
+      }
+      return { periodSummaries: [...state.periodSummaries, summary] }
+    }),
   setPeriodSummaries: (summaries) => set({ periodSummaries: summaries }),
   setFinalSummary: (summary) => set({ finalSummary: summary }),
   clearCurrent: () =>

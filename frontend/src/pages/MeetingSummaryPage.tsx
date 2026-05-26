@@ -1,44 +1,98 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMeetingStore } from '../stores/meetingStore'
 import { getMeeting } from '../api/meetings'
-import { getFinalSummary } from '../api/summary'
+import { getFinalSummary, getPeriodSummaries } from '../api/summary'
 import { getTranscripts } from '../api/transcript'
 import FinalSummaryView from '../components/summary/FinalSummaryView'
 import ActionItemList from '../components/summary/ActionItemList'
+import PeriodSummaryCard from '../components/summary/PeriodSummaryCard'
 import TranscriptItem from '../components/transcript/TranscriptItem'
 import type { TranscriptSegment } from '../types/meeting'
 
 export default function MeetingSummaryPage() {
   const { meetingId } = useParams<{ meetingId: string }>()
   const navigate = useNavigate()
-  const { currentMeeting, setCurrentMeeting, clearCurrent, finalSummary, setFinalSummary } = useMeetingStore()
+  const {
+    currentMeeting,
+    setCurrentMeeting,
+    clearCurrent,
+    finalSummary,
+    setFinalSummary,
+    periodSummaries,
+    setPeriodSummaries,
+  } = useMeetingStore()
+
   const [transcripts, setTranscripts] = useState<TranscriptSegment[]>([])
   const [showTranscripts, setShowTranscripts] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [summaryLoading, setSummaryLoading] = useState(true)
+  const [periodLoading, setPeriodLoading] = useState(true)
+  const pollingDoneRef = useRef(false)
 
   useEffect(() => {
     if (!meetingId) return
 
-    // 切换会议时，先清空之前的数据
     clearCurrent()
     setLoading(true)
+    setSummaryLoading(true)
+    setPeriodLoading(true)
+    pollingDoneRef.current = false
 
+    // 并行加载：会议信息、转写、阶段总结（已有数据）
     Promise.all([
       getMeeting(meetingId),
-      getFinalSummary(meetingId),
       getTranscripts(meetingId, 0, 1000),
-    ]).then(([meeting, summary, transcriptResp]) => {
+      getPeriodSummaries(meetingId),
+    ]).then(([meeting, transcriptResp, periodResp]) => {
       setCurrentMeeting(meeting)
-      setFinalSummary(summary)
       setTranscripts(transcriptResp.items)
-      setLoading(false)
+      setPeriodSummaries(periodResp)
+      setPeriodLoading(false)
+    }).catch(() => {
+      setPeriodLoading(false)
     })
-  }, [meetingId, setCurrentMeeting, setFinalSummary, clearCurrent])
 
-  if (loading) {
-    return <div className="text-center text-gray-500 py-16">加载中...</div>
-  }
+    // 轮询最终总结（等待 LLM 生成）
+    let attempts = 0
+    const maxAttempts = 30
+    const pollInterval = 5000
+
+    function pollFinalSummary() {
+      if (!meetingId || pollingDoneRef.current) return
+
+      getFinalSummary(meetingId)
+        .then((summary) => {
+          if (summary) {
+            setFinalSummary(summary)
+            setSummaryLoading(false)
+            setLoading(false)
+            pollingDoneRef.current = true
+          }
+        })
+        .catch(() => {
+          // 404 或网络错误，继续轮询
+        })
+        .finally(() => {
+          attempts++
+          if (attempts >= maxAttempts && !pollingDoneRef.current) {
+            setSummaryLoading(false)
+            setLoading(false)
+            pollingDoneRef.current = true
+          }
+        })
+    }
+
+    pollFinalSummary()
+    const timer = setInterval(pollFinalSummary, pollInterval)
+
+    return () => {
+      clearInterval(timer)
+      pollingDoneRef.current = true
+    }
+  }, [meetingId, setCurrentMeeting, setFinalSummary, setPeriodSummaries, clearCurrent])
+
+  const showEmptyFinal = !loading && !summaryLoading && !finalSummary
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -55,17 +109,36 @@ export default function MeetingSummaryPage() {
         </div>
       </div>
 
+      {/* 阶段总结（录制期间已有的总结卡片） */}
+      {periodSummaries.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-3 text-gray-300">阶段总结</h2>
+          <div className="space-y-3">
+            {periodSummaries.map((s) => (
+              <PeriodSummaryCard key={s.id} summary={s} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 总结内容 - 白底卡片风格 */}
       <div className="bg-white text-gray-900 rounded-xl p-8 mb-6">
         {finalSummary ? (
           <FinalSummaryView summary={finalSummary} />
+        ) : summaryLoading ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent mb-4" />
+            <p className="text-gray-500">AI 正在生成会议总结，请稍候...</p>
+          </div>
         ) : (
-          <div className="text-center text-gray-500 py-12">暂无总结数据</div>
+          <div className="text-center text-gray-500 py-12">
+            暂无总结数据（请确认 Ollama 服务已启动）
+          </div>
         )}
       </div>
 
       {/* Action Items */}
-      {finalSummary && finalSummary.action_items.length > 0 && (
+      {finalSummary && finalSummary.action_items && finalSummary.action_items.length > 0 && (
         <div className="bg-white text-gray-900 rounded-xl p-8 mb-6">
           <h2 className="text-xl font-bold mb-4">待办事项</h2>
           <ActionItemList items={finalSummary.action_items} />

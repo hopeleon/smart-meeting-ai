@@ -1,6 +1,10 @@
-import json
+import ast
 import os
 from contextlib import asynccontextmanager
+
+# 允许在已有事件循环中嵌套执行 asyncio.run()
+import nest_asyncio
+nest_asyncio.apply()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,7 +55,7 @@ app = FastAPI(
 )
 
 # CORS
-origins = json.loads(settings.CORS_ORIGINS)
+origins = ast.literal_eval(settings.CORS_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

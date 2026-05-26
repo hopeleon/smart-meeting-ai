@@ -40,6 +40,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.asr.model_manager import get_model_manager
+from app.config import settings
 from app.asr.vad_asr_pipeline import (
     StreamingPipeline,
     create_streaming_pipeline,
@@ -436,17 +437,19 @@ async def handle_meeting_websocket(websocket: WebSocket, meeting_id: str):
         store.set_pipeline(meeting_id, pipeline)
         print(f"[Server] 流式管道已启动，开始接收音频", flush=True)
 
-        # 定时阶段总结任务（每 2 分钟）
-        PERIOD_SUMMARY_INTERVAL_SECONDS = 120
-        last_summary_time = time.time()
+        # 定时阶段总结任务（每 N 分钟，间隔可配置，默认 60 秒）
+        last_summary_time = 0.0  # 初始值 0，保证首次必定触发
+        period_interval = settings.PERIOD_SUMMARY_INTERVAL_SECONDS
 
         async def try_period_summary():
             nonlocal last_summary_time
             current_time = time.time()
-            if current_time - last_summary_time < PERIOD_SUMMARY_INTERVAL_SECONDS:
+
+            # 时间间隔检查：每次触发都要等够 period_interval 秒
+            # 注意：last_summary_time 在成功生成总结后才更新
+            if current_time - last_summary_time < period_interval:
                 return
 
-            # 先在 session 外查询并生成总结，再进 session 存储
             from app.database import async_session as _async_session
             from app.models.transcript import TranscriptLine
 
@@ -467,25 +470,32 @@ async def handle_meeting_websocket(websocket: WebSocket, meeting_id: str):
             if not recent_lines:
                 return
 
-            try:
-                print(f"[Server] 已触发阶段总结，转写条数: {len(recent_lines)}", flush=True)
+            print(f"[Server] 已触发阶段总结，转写条数: {len(recent_lines)}", flush=True)
+            if recent_lines:
+                print(f"[Server] 最近转写时间范围: {recent_lines[0]['start']:.2f}s ~ {recent_lines[-1]['start']:.2f}s", flush=True)
 
-                # LLM 调用（在 session 外执行）
+            try:
                 from app.services.summary_service import SummaryService
                 from datetime import datetime as _dt
 
                 service = SummaryService()
-                llm_result = await service.summarize_period(meeting_id, recent_lines)
-                bullet_points = llm_result.get("bullet_points", [])
+
+                def _call_llm():
+                    """同步调用 subprocess，供 to_thread 使用"""
+                    return service._call_meetingsummary_from_lines(recent_lines, prefix=f"period_{meeting_id[:8]}")
+
+                llm_result = await asyncio.to_thread(_call_llm)
+                bullet_points = llm_result.get("bullet_points", []) if llm_result else []
 
                 # 计算时间范围
-                period_start = min((l.get("start", 0) for l in recent_lines), default=0)
-                period_end = max((l.get("end", 0) for l in recent_lines), default=0)
+                if recent_lines:
+                    period_start = min((l.get("start", 0) for l in recent_lines), default=0)
+                    period_end = max((l.get("end", 0) for l in recent_lines), default=0)
+                    print(f"[Server] 阶段总结时间: period_start={period_start:.3f}s, period_end={period_end:.3f}s", flush=True)
+                    print(f"[Server] 最近3条: {[(l['start'], l['end'], l['text'][:20]) for l in recent_lines[-3:]]}", flush=True)
 
-                # 生成 summary_id（不依赖 session 对象）
                 summary_id = str(uuid.uuid4())
 
-                # 在独立 session 中存储（避免嵌套 session 问题）
                 async with _async_session() as db2:
                     from app.models.summary import PeriodSummary
                     summary = PeriodSummary(
@@ -499,7 +509,6 @@ async def handle_meeting_websocket(websocket: WebSocket, meeting_id: str):
                     db2.add(summary)
                     await db2.commit()
 
-                # 推送给前端（不在 session 上下文中）
                 await _manager.broadcast(meeting_id, {
                     "type": "period_summary",
                     "data": {
@@ -512,13 +521,13 @@ async def handle_meeting_websocket(websocket: WebSocket, meeting_id: str):
                     }
                 })
                 print(f"[Server] 阶段总结已推送，bullet_points={len(bullet_points)}", flush=True)
-                last_summary_time = current_time
+                last_summary_time = time.time()
             except Exception as e:
                 print(f"[Server] 触发阶段总结失败: {e}", flush=True)
                 import traceback as _tb
                 print(f"[Server] 阶段总结异常详情: {_tb.format_exc()}", flush=True)
 
-        # 主循环：接收音频
+        # 主循环：接收音频 + 定时阶段总结
         chunk_count = 0
         first_audio_logged = False
 
@@ -529,6 +538,15 @@ async def handle_meeting_websocket(websocket: WebSocket, meeting_id: str):
                 return raw
             except asyncio.TimeoutError:
                 return None
+
+        async def _period_summary_loop():
+            """定时触发阶段总结的后台任务（每 30 秒检查一次是否该生成）"""
+            while not _connection_closed:
+                await asyncio.sleep(30)
+                if not _connection_closed and chunk_count > 0:
+                    await try_period_summary()
+
+        period_task = asyncio.create_task(_period_summary_loop())
 
         while True:
             raw = await _wait_for_message(30.0)
@@ -617,9 +635,6 @@ async def handle_meeting_websocket(websocket: WebSocket, meeting_id: str):
                     await pipeline.feed_audio(arr)
                     chunk_count += 1
 
-                    if chunk_count % 200 == 0:
-                        await try_period_summary()
-
                 except Exception as e:
                     print(f"[Server] 音频解码失败: {e}", flush=True)
                     continue
@@ -655,6 +670,14 @@ async def handle_meeting_websocket(websocket: WebSocket, meeting_id: str):
                     task.cancel()
                 except Exception as e:
                     print(f"[Server] 任务异常: {e}", flush=True)
+
+        # 取消定时阶段总结任务
+        if not period_task.done():
+            period_task.cancel()
+            try:
+                await period_task
+            except asyncio.CancelledError:
+                pass
 
         store.close(meeting_id)
         print(f"[Server] 会议 {meeting_id} 会话已清理", flush=True)

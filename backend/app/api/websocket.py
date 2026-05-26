@@ -45,6 +45,9 @@ class ConnectionManager:
     async def send_meeting_status(self, meeting_id: str, status: str):
         await self.broadcast(meeting_id, {"type": "meeting_status", "data": {"status": status}})
 
+    async def send_final_summary(self, meeting_id: str, data: dict):
+        await self.broadcast(meeting_id, {"type": "final_summary", "data": data})
+
 
 manager = ConnectionManager()
 

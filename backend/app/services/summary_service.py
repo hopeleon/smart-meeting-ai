@@ -10,7 +10,6 @@ LLM 总结服务
 
 import json
 import subprocess
-import tempfile
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -18,8 +17,12 @@ from typing import Optional
 from app.config import settings
 
 
-# meetingsummary 模块路径（与 backend 同级）
-MEETINGSUMMARY_DIR = Path(__file__).resolve().parents[2] / "meetingsummary"
+# meetingsummary 模块路径（项目根目录下，与 backend 同级）
+MEETINGSUMMARY_DIR = Path(__file__).resolve().parents[3] / "meetingsummary"
+
+
+# summaries 输出目录（项目内）
+SUMMARIES_DIR = Path(__file__).resolve().parents[2] / "summaries"
 
 
 class SummaryService:
@@ -46,7 +49,8 @@ class SummaryService:
             {"bullet_points": ["要点1", "要点2", ...]}
         """
         if output_dir is None:
-            output_dir = Path(tempfile.mkdtemp(prefix="summary_period_"))
+            output_dir = SUMMARIES_DIR / "period"
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         transcript_text = self._format_transcript(transcript_lines)
         result = self._call_meetingsummary(
@@ -101,7 +105,8 @@ class SummaryService:
             }
         """
         if output_dir is None:
-            output_dir = Path(tempfile.mkdtemp(prefix="summary_final_"))
+            output_dir = SUMMARIES_DIR / "final"
+        output_dir.mkdir(parents=True, exist_ok=True)
 
         transcript_text = self._format_transcript(all_transcript_lines)
         result = self._call_meetingsummary(
@@ -130,12 +135,14 @@ class SummaryService:
         for a in result.get("action_items", []):
             if isinstance(a, dict):
                 action_items.append({
+                    "id": str(uuid.uuid4()),
                     "content": a.get("task", a.get("description", a.get("content", ""))),
                     "assignee": a.get("assignee"),
                     "due_date": a.get("deadline", a.get("due_date")),
+                    "status": "pending",
                 })
             elif isinstance(a, str):
-                action_items.append({"content": a, "assignee": None, "due_date": None})
+                action_items.append({"id": str(uuid.uuid4()), "content": a, "assignee": None, "due_date": None, "status": "pending"})
 
         return {
             "overview": overview,
@@ -172,6 +179,12 @@ class SummaryService:
             print(f"[SummaryService] meetingsummary config.json 不存在: {config_path}")
             return None
 
+        config_path = self.meetingsummary_dir / "config.json"
+        if not config_path.exists():
+            print(f"[SummaryService] meetingsummary config.json 不存在: {config_path}")
+            return None
+
+        print(f"[SummaryService] 写入转写文件...", flush=True)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # 写入临时转写文件
@@ -191,6 +204,7 @@ class SummaryService:
         ]
         cmd = [c for c in cmd if c]  # 过滤空字符串
 
+        print(f"[SummaryService] subprocess 调用: {' '.join(cmd)}", flush=True)
         try:
             result = subprocess.run(
                 cmd,
@@ -199,6 +213,7 @@ class SummaryService:
                 timeout=180,
                 cwd=str(self.meetingsummary_dir),
             )
+            print(f"[SummaryService] subprocess returncode={result.returncode}", flush=True)
             print(f"[SummaryService] meetingsummary stdout:\n{result.stdout}")
             if result.stderr:
                 print(f"[SummaryService] meetingsummary stderr:\n{result.stderr}")
@@ -229,3 +244,44 @@ class SummaryService:
             "key_decisions": [],
             "action_items": [],
         }
+
+    def _call_meetingsummary_from_lines(
+        self,
+        transcript_lines: list[dict],
+        prefix: str = "summary",
+    ) -> dict | None:
+        """
+        给定转写行列表，调用 meetingsummary CLI，返回原始 JSON 结果。
+        供 asyncio.to_thread() 在线程池中同步调用，不阻塞事件循环。
+        """
+        output_dir = SUMMARIES_DIR / "period"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        transcript_text = "\n".join(
+            f"{line.get('speaker', '未知')}：{line.get('text', '')}"
+            for line in transcript_lines
+        )
+        input_file = output_dir / f"{prefix}_input.txt"
+        input_file.write_text(transcript_text, encoding="utf-8")
+
+        result = self._call_meetingsummary(
+            transcript_text,
+            output_dir=output_dir,
+            prefix=prefix,
+            skip_eval=True,
+            skip_completeness=True,
+        )
+        if result is None:
+            return None
+
+        # 提取 bullet_points
+        bullet_points = []
+        if result.get("tldr"):
+            bullet_points.append(result["tldr"])
+        for point in result.get("discussion_points", []):
+            if isinstance(point, dict):
+                title = point.get("title", "")
+                summary = point.get("summary", "")
+                bullet_points.append(f"【{title}】{summary}" if summary else title)
+            elif isinstance(point, str):
+                bullet_points.append(point)
+        return {"bullet_points": bullet_points}

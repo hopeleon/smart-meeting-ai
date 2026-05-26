@@ -7,6 +7,16 @@ export async function getPeriodSummaries(meetingId: string): Promise<PeriodSumma
 }
 
 export async function getFinalSummary(meetingId: string): Promise<FinalSummary | null> {
-  const resp = await apiClient.get(`/meetings/${meetingId}/summaries/final`)
-  return resp.data
+  try {
+    const resp = await apiClient.get(`/meetings/${meetingId}/summaries/final`)
+    return resp.data
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'response' in err) {
+      const axiosErr = err as { response?: { status?: number } }
+      if (axiosErr.response?.status === 404) {
+        return null
+      }
+    }
+    throw err
+  }
 }
