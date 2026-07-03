@@ -10,9 +10,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from config import OllamaConfig
-from json_parser import JSONExtractionError, extract_json
-from ollama_client import call_ollama
+from .config import OllamaConfig
+from .json_parser import JSONExtractionError, extract_json
+from .ollama_client import call_ollama
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -95,7 +95,7 @@ def extract_action_items(
     config: OllamaConfig,
     system_prompt: str,
     transcript: str,
-    timeout: int = 120,
+    timeout: int = 0,  # 0 表示无超时限制
 ) -> list[dict[str, Any]]:
     """Run the dedicated action-item extraction pipeline.
 

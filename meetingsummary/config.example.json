@@ -1,7 +1,7 @@
 {
     "ollama": {
         "base_url": "http://localhost:11434",
-        "model": "qwen3:8b",
+        "model": "qwen3:32b",
         "provider": "ollama",
         "api_key": "",
         "chat_path": "/v1/chat/completions"

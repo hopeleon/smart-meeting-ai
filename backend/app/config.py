@@ -7,36 +7,38 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     ENV: str = "development"
 
     DATABASE_URL: str = ""
 
-    REDIS_URL: str = "redis://localhost:6379/0"
-    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
-
-    ASR_SERVICE_URL: str = "http://localhost:8001"
-    DIARIZATION_SERVICE_URL: str = "http://localhost:8002"
-    LLM_SUMMARY_SERVICE_URL: str = "http://localhost:8003"
-
     FUNASR_MODEL_DIR: str = ""
-    PUNC_MODEL_DIR: str = ""
+    # 已废弃，CAM++ 模型路径已硬编码在 model_manager.py
     CAMPPLUS_MODEL_DIR: str = ""
-    CAMPPLUS_EN_MODEL_DIR: str = ""
     LOCAL_MODEL_DIR: str = ""
     LOCAL_DEVICE: str = "cuda"
 
     SPEAKER_SIMILARITY_THRESHOLD: float = 0.6
     SPEAKER_MIN_CONFIDENCE: float = 0.5
     SPEAKER_VOTE_WINDOWS: int = 3
+    PERIOD_SUMMARY_INTERVAL_SECONDS: float = 60.0
 
     AUDIO_STORAGE_PATH: str = "./audio_files"
-    PERIOD_SUMMARY_INTERVAL_SECONDS: int = 60
 
     SECRET_KEY: str = "change-me-in-production"
-    CORS_ORIGINS: str = '["http://localhost","http://localhost:5173"]'
+    CORS_ORIGINS: str = '["http://localhost","http://localhost:5179"]'
+
+    @property
+    def audio_storage_abs_path(self) -> str:
+        """获取音频存储目录的绝对路径"""
+        if os.path.isabs(self.AUDIO_STORAGE_PATH):
+            return self.AUDIO_STORAGE_PATH
+        return os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            self.AUDIO_STORAGE_PATH
+        )
 
     @model_validator(mode="after")
     def apply_local_defaults(self):

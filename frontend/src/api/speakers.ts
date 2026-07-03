@@ -76,6 +76,16 @@ export interface DeleteResponse {
   message: string
 }
 
+export interface SupplementResponse {
+  success: boolean
+  speaker_id: string
+  name: string
+  message: string
+  quality: number
+  total_samples: number
+  total_duration: number
+}
+
 export interface SearchResponse {
   speakers: SpeakerProfile[]
   total: number
@@ -164,7 +174,7 @@ function buildQualityErrorMessage(detail: any): string {
 
   if (detail.fix_guide) {
     lines.push(`💡 修复建议：`)
-    detail.fix_guide.split('\n').forEach(line => {
+    detail.fix_guide.split('\n').forEach((line: string) => {
       lines.push(`   ${line}`)
     })
   }
@@ -178,4 +188,26 @@ export async function deleteSpeaker(speakerId: string): Promise<DeleteResponse> 
     speaker_id: speakerId,
   })
   return data
+}
+
+// 补充声纹音频（为已注册说话人追加新样本）
+export async function supplementSpeakerAudio(
+  speakerId: string,
+  audioFile: File
+): Promise<SupplementResponse> {
+  const formData = new FormData()
+  formData.append('speaker_id', speakerId)
+  formData.append('audio', audioFile)
+
+  try {
+    const { data } = await apiClient.post<SupplementResponse>('/speakers/supplement', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return data
+  } catch (error: any) {
+    if (error.response?.status === 404) {
+      throw new Error(`未找到声纹ID「${speakerId}」，请先注册`)
+    }
+    throw error
+  }
 }

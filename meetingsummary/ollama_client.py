@@ -1,18 +1,22 @@
 """LLM client supporting both Ollama (local) and OpenAI-compatible (external) APIs."""
 
 import sys
+import os
 from typing import Any
 
 import requests
 
-from config import OllamaConfig
+from .config import OllamaConfig
+
+DEFAULT_TIMEOUT = int(os.getenv("MEETING_SUMMARY_TIMEOUT", "600"))
+DEFAULT_MAX_TOKENS = int(os.getenv("MEETING_SUMMARY_MAX_TOKENS", "2048"))
 
 
 def call_ollama(
     config: OllamaConfig,
     system_prompt: str,
     transcript: str,
-    timeout: int = 120,
+    timeout: int = 0,
 ) -> str:
     """Send a chat request and return the model response.
 
@@ -24,15 +28,15 @@ def call_ollama(
         config: Connection configuration.
         system_prompt: System-level instruction for the model.
         transcript: The meeting transcript to summarize.
-        timeout: Request timeout in seconds (default 120).
+        timeout: Request timeout in seconds (0 = use MEETING_SUMMARY_TIMEOUT).
 
     Returns:
         The model's response text.
 
-    Exits with code 1 on connection or HTTP errors.
+    Raises RuntimeError on connection or HTTP errors.
     """
     messages = [
-        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": "/no_think\n" + system_prompt},
         {"role": "user", "content": transcript},
     ]
 
@@ -52,28 +56,33 @@ def _call_ollama_api(
         "model": config.model,
         "messages": messages,
         "stream": False,
-        "options": {"temperature": 0.1},
+        "think": False,
+        "options": {
+            "temperature": 0.1,
+            "num_predict": DEFAULT_MAX_TOKENS,
+        },
     }
+    timeout_val = DEFAULT_TIMEOUT if timeout <= 0 else timeout
     try:
-        response = requests.post(url, json=payload, timeout=timeout)
+        response = requests.post(url, json=payload, timeout=timeout_val)
+    except requests.Timeout:
+        raise RuntimeError(
+            f"Ollama request timed out after {timeout_val} seconds. "
+            "Increase timeout or check if Ollama is overloaded."
+        )
     except requests.ConnectionError:
-        print(
-            f"Error: Cannot reach Ollama at {config.base_url}. "
+        raise RuntimeError(
+            f"Cannot reach Ollama at {config.base_url}. "
             "Is Ollama running? Start it with: ollama serve"
         )
-        sys.exit(1)
-    except requests.Timeout:
-        print(f"Error: Request to Ollama timed out after {timeout} seconds.")
-        sys.exit(1)
 
     try:
         response.raise_for_status()
     except requests.HTTPError:
-        print(
-            f"Error: Ollama returned HTTP {response.status_code}.\n"
+        raise RuntimeError(
+            f"Ollama returned HTTP {response.status_code}.\n"
             f"Response: {response.text}"
         )
-        sys.exit(1)
 
     return response.json()["message"]["content"]
 
@@ -92,28 +101,29 @@ def _call_openai_compatible(
         "model": config.model,
         "messages": messages,
         "temperature": 0.1,
+        "max_tokens": DEFAULT_MAX_TOKENS,
     }
+    timeout_val = DEFAULT_TIMEOUT if timeout <= 0 else timeout
     try:
         response = requests.post(
-            url, json=payload, headers=headers, timeout=timeout
+            url, json=payload, headers=headers, timeout=timeout_val
+        )
+    except requests.Timeout:
+        raise RuntimeError(
+            f"API request timed out after {timeout_val} seconds."
         )
     except requests.ConnectionError:
-        print(
-            f"Error: Cannot reach API at {config.base_url}. "
+        raise RuntimeError(
+            f"Cannot reach API at {config.base_url}. "
             "Check your network and base_url."
         )
-        sys.exit(1)
-    except requests.Timeout:
-        print(f"Error: Request to API timed out after {timeout} seconds.")
-        sys.exit(1)
 
     try:
         response.raise_for_status()
     except requests.HTTPError:
-        print(
-            f"Error: API returned HTTP {response.status_code}.\n"
+        raise RuntimeError(
+            f"API returned HTTP {response.status_code}.\n"
             f"Response: {response.text}"
         )
-        sys.exit(1)
 
     return response.json()["choices"][0]["message"]["content"]

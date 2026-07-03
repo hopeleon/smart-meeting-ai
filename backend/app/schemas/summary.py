@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -10,6 +10,20 @@ class ActionItem(BaseModel):
     assignee: str | None = None
     due_date: str | None = None
     status: Literal["pending", "in-progress", "done"] = "pending"
+
+
+class FinalSummaryDetailResponse(BaseModel):
+    id: str
+    meeting_id: str
+    overview: str
+    full_text: str
+    markdown: str | None = None
+    raw_json: dict[str, Any] | None = None
+    key_decisions: list[str]
+    action_items: list[ActionItem]
+    generated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class PeriodSummaryResponse(BaseModel):
@@ -27,6 +41,9 @@ class FinalSummaryResponse(BaseModel):
     id: str
     meeting_id: str
     overview: str
+    full_text: str
+    markdown: str | None = None
+    raw_json: dict[str, Any] | None = None
     key_decisions: list[str]
     action_items: list[ActionItem]
     generated_at: datetime

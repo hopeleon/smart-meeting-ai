@@ -7,9 +7,9 @@ completeness through a second-pass LLM call.
 
 from typing import Any
 
-from config import OllamaConfig
-from json_parser import JSONExtractionError, extract_json
-from ollama_client import call_ollama
+from .config import OllamaConfig
+from .json_parser import JSONExtractionError, extract_json
+from .ollama_client import call_ollama
 
 COVERAGE_THRESHOLD: float = 80.0
 
@@ -158,7 +158,7 @@ def run_completeness_check(
     system_prompt: str,
     transcript: str,
     summary: dict[str, Any],
-    timeout: int = 120,
+    timeout: int = 0,  # 0 表示无超时限制
 ) -> dict[str, Any]:
     """Run the full completeness check pipeline.
 

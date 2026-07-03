@@ -113,7 +113,8 @@ class SpeakerDatabase:
         speaker_id      TEXT    PRIMARY KEY,
         embedding       BLOB,
         embedding_mean  BLOB,
-        embedding_std   BLOB
+        embedding_std   BLOB,
+        embedding_count INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS speaker_identification_log (
@@ -140,6 +141,13 @@ class SpeakerDatabase:
         with sqlite3.connect(self.db_path) as conn:
             conn.executescript(self.SCHEMA)
             conn.commit()
+            # 迁移：为已有行补充 embedding_count 列
+            try:
+                cur = conn.execute("SELECT embedding_count FROM speaker_embeddings LIMIT 1")
+                cur.close()
+            except sqlite3.OperationalError:
+                conn.execute("ALTER TABLE speaker_embeddings ADD COLUMN embedding_count INTEGER DEFAULT 1")
+                conn.commit()
 
     def _conn(self) -> sqlite3.Connection:
         """获取数据库连接"""
@@ -200,15 +208,87 @@ class SpeakerDatabase:
 
             conn.execute("""
                 INSERT OR REPLACE INTO speaker_embeddings
-                (speaker_id, embedding, embedding_mean, embedding_std)
-                VALUES (?, ?, ?, ?)
+                (speaker_id, embedding, embedding_mean, embedding_std, embedding_count)
+                VALUES (?, ?, ?, ?, ?)
             """, (
                 speaker_id,
                 ndarray_to_bytes(embedding),
                 ndarray_to_bytes(embedding_mean) if embedding_mean is not None else None,
                 ndarray_to_bytes(embedding_std) if embedding_std is not None else None,
+                sample_count,
             ))
             conn.commit()
+        return True
+
+    def supplement_audio(
+        self,
+        speaker_id: str,
+        new_embedding: np.ndarray,
+        quality: float = 0.0,
+    ) -> bool:
+        """
+        用 Welford 在线算法将新音频补充到已注册说话人的声纹中。
+        会更新 speaker_profiles.sample_count 和 speaker_embeddings 的统计量。
+
+        Args:
+            speaker_id: 已注册的说话人 ID
+            new_embedding: 新音频提取的 192 维声纹向量
+            quality: 新音频的质量分
+
+        Returns:
+            True 更新成功，False 说话人不存在或嵌入无效
+        """
+        if new_embedding is None or np.linalg.norm(new_embedding) < 1e-7:
+            return False
+
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM speaker_embeddings WHERE speaker_id = ?",
+                (speaker_id,)
+            ).fetchone()
+            if row is None:
+                return False
+
+            # 读取现有统计量
+            existing_mean = bytes_to_ndarray(row["embedding_mean"]) if row["embedding_mean"] else None
+            existing_count = row["embedding_count"] or 1
+
+            # Welford 在线均值更新
+            # M_new = M_old + (x - M_old) / n_new
+            # M_old: existing_mean, x: new_embedding, n_new: existing_count + 1
+            new_count = existing_count + 1
+            if existing_mean is not None:
+                updated_mean = existing_mean + (new_embedding - existing_mean) / new_count
+            else:
+                updated_mean = new_embedding
+
+            # 更新 speaker_profiles
+            profile_row = conn.execute(
+                "SELECT sample_count FROM speaker_profiles WHERE speaker_id = ?",
+                (speaker_id,)
+            ).fetchone()
+            if profile_row:
+                new_profile_count = profile_row["sample_count"] + 1
+                conn.execute("""
+                    UPDATE speaker_profiles
+                    SET sample_count = ?, quality = ?, updated_at = ?
+                    WHERE speaker_id = ?
+                """, (new_profile_count, quality, self._iso_now(), speaker_id))
+
+            # 更新 speaker_embeddings
+            conn.execute("""
+                UPDATE speaker_embeddings
+                SET embedding = ?, embedding_mean = ?, embedding_count = ?
+                WHERE speaker_id = ?
+            """, (
+                ndarray_to_bytes(new_embedding),
+                ndarray_to_bytes(updated_mean),
+                new_count,
+                speaker_id,
+            ))
+            conn.commit()
+
+        print(f"[声纹-补充] {speaker_id} 补充音频，已累计 {new_count} 条样本", flush=True)
         return True
 
     # ==================== 查 ====================
@@ -223,7 +303,7 @@ class SpeakerDatabase:
             if profile_row is None:
                 return None
             emb_row = conn.execute(
-                "SELECT embedding, embedding_mean, embedding_std FROM speaker_embeddings WHERE speaker_id = ?",
+                "SELECT embedding, embedding_mean, embedding_std, embedding_count FROM speaker_embeddings WHERE speaker_id = ?",
                 (speaker_id,)
             ).fetchone()
             return _row_to_dict(profile_row, emb_row)
@@ -243,11 +323,15 @@ class SpeakerDatabase:
             results = []
             for pr in profile_rows:
                 emb_row = conn.execute(
-                    "SELECT embedding, embedding_mean, embedding_std FROM speaker_embeddings WHERE speaker_id = ?",
+                    "SELECT embedding, embedding_mean, embedding_std, embedding_count FROM speaker_embeddings WHERE speaker_id = ?",
                     (pr["speaker_id"],)
                 ).fetchone()
                 results.append(_row_to_dict(pr, emb_row))
             return results
+
+    def get_all_speakers(self) -> List[Dict[str, Any]]:
+        """兼容性别名：返回所有在职说话人"""
+        return self.load_all(active_only=True)
 
     def load_by_department(self, department: str) -> List[Dict[str, Any]]:
         """按部门加载"""
@@ -259,7 +343,7 @@ class SpeakerDatabase:
             results = []
             for pr in profile_rows:
                 emb_row = conn.execute(
-                    "SELECT embedding, embedding_mean, embedding_std FROM speaker_embeddings WHERE speaker_id = ?",
+                    "SELECT embedding, embedding_mean, embedding_std, embedding_count FROM speaker_embeddings WHERE speaker_id = ?",
                     (pr["speaker_id"],)
                 ).fetchone()
                 results.append(_row_to_dict(pr, emb_row))
@@ -275,7 +359,7 @@ class SpeakerDatabase:
             results = []
             for pr in profile_rows:
                 emb_row = conn.execute(
-                    "SELECT embedding, embedding_mean, embedding_std FROM speaker_embeddings WHERE speaker_id = ?",
+                    "SELECT embedding, embedding_mean, embedding_std, embedding_count FROM speaker_embeddings WHERE speaker_id = ?",
                     (pr["speaker_id"],)
                 ).fetchone()
                 results.append(_row_to_dict(pr, emb_row))
@@ -563,10 +647,12 @@ def _row_to_dict(profile_row: sqlite3.Row, emb_row: Optional[sqlite3.Row]) -> Di
         d["embedding"] = bytes_to_ndarray(emb_row["embedding"]) if emb_row["embedding"] else None
         d["embedding_mean"] = bytes_to_ndarray(emb_row["embedding_mean"]) if emb_row["embedding_mean"] else None
         d["embedding_std"] = bytes_to_ndarray(emb_row["embedding_std"]) if emb_row["embedding_std"] else None
+        d["embedding_count"] = emb_row["embedding_count"]
     else:
         d["embedding"] = None
         d["embedding_mean"] = None
         d["embedding_std"] = None
+        d["embedding_count"] = 0
 
     if d.get("embedding_std") is not None and d["embedding_std"].size > 0:
         std_arr = d["embedding_std"]

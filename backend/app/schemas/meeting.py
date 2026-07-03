@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -7,6 +9,7 @@ class MeetingCreate(BaseModel):
     title: str
     description: str | None = None
     participants: list[str] = []
+    mode: Literal["realtime", "offline", "whisper", "qwen"] = "realtime"
 
 
 class MeetingUpdate(BaseModel):
@@ -14,6 +17,7 @@ class MeetingUpdate(BaseModel):
     description: str | None = None
     status: str | None = None
     participants: list[str] | None = None
+    mode: Literal["realtime", "offline", "whisper", "qwen"] | None = None
 
 
 class MeetingResponse(BaseModel):
@@ -22,6 +26,7 @@ class MeetingResponse(BaseModel):
     description: str | None
     status: str
     participants: list[str]
+    mode: Literal["realtime", "offline", "whisper", "qwen"]
     created_at: datetime
     updated_at: datetime
 

@@ -1,0 +1,26 @@
+# 忽略模型文件（运行时通过 volumes 挂载）
+models/
+backend/models/
+*.gguf
+*.bin
+
+# 忽略数据文件
+*.db
+*.db-journal
+summaries/
+audio_files/
+data/
+
+# 忽略缓存
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+
+# 忽略测试和文档
+tests/
+*.md
+summaries/
+log.txt

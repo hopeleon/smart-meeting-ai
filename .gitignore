@@ -29,7 +29,8 @@ frontend/dist/
 # Docker
 docker-compose.override.yml
 
-# Audio files
+# Audio files (uploaded meeting recordings)
+backend/audio_files/
 *.wav
 *.mp3
 *.ogg
@@ -55,3 +56,9 @@ meetingsummary/models/
 
 # SQLite (local dev)
 *.db
+
+# Runtime / generated artifacts
+frontend/.ssl/
+backend/summaries/
+*.pkl
+*.zip

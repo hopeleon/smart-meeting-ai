@@ -1,5 +1,5 @@
 """
-音频去噪模块 — 对齐 D:\InsightEye\app\audio_denoiser.py
+音频去噪模块 — 对齐 InsightEye
 在音频送入 ASR 前进行预处理，提高识别准确率
 
 主要使用 RNNoise（实时专用，轻量高效）
@@ -92,7 +92,6 @@ class RNNoiseDenoiser:
 
     def _compute_wiener_gain(self, mag: np.ndarray, noise_profile: np.ndarray) -> np.ndarray:
         n_bins = len(mag)
-        gamma = np.zeros(n_bins, dtype=np.float32)
 
         noise_power = noise_profile ** 2 + self._eps
         signal_power = mag ** 2
@@ -314,3 +313,67 @@ def denoise_audio(
     """便捷函数：对音频进行去噪"""
     denoiser = get_denoiser(backend=backend)
     return denoiser.denoise(audio, sample_rate)
+
+
+# ===== 噪声门控去噪（安全实装：仅在确实嘈杂时启用，输出同长度、无共享状态）=====
+DENOISE_SNR_THRESHOLD_DB = 8.0   # 估计 SNR 低于此(dB)才去噪；干净/正常音频一律不动
+
+
+def estimate_snr_db(audio, sample_rate: int = 16000, frame_ms: int = 30) -> float:
+    """用帧 RMS 的 90/10 百分位比估计粗略 SNR(dB)。越高越干净；太短返回 99(视为干净)。"""
+    a = np.asarray(audio, dtype=np.float32)
+    f = int(sample_rate * frame_ms / 1000)
+    n = len(a) // f
+    if n < 6:
+        return 99.0
+    fr = a[:n * f].reshape(n, f)
+    rms = np.sqrt(np.mean(fr ** 2, axis=1)) + 1e-9
+    noise = np.percentile(rms, 10)
+    sig = np.percentile(rms, 90)
+    return float(20.0 * np.log10(sig / (noise + 1e-9)))
+
+
+def denoise_full(audio, sample_rate: int = 16000, frame: int = 512, hop: int = 256):
+    """无状态全缓冲频域维纳去噪，输出与输入等长（正确 OLA 归一，修正原 overlap-add 写法）。"""
+    a = np.asarray(audio, dtype=np.float32)
+    n = len(a)
+    if n < frame:
+        return a
+    win = np.hanning(frame).astype(np.float32)
+    pad = (-(n - frame)) % hop
+    ap = np.concatenate([a, np.zeros(pad + frame, dtype=np.float32)])
+    nframes = 1 + (len(ap) - frame) // hop
+    specs = []
+    mags = np.empty((nframes, frame // 2 + 1), dtype=np.float32)
+    for i in range(nframes):
+        seg = ap[i * hop:i * hop + frame] * win
+        S = np.fft.rfft(seg)
+        specs.append(S)
+        mags[i] = np.abs(S)
+    noise_mag = np.percentile(mags, 20, axis=0)
+    nb2 = noise_mag ** 2 + 1e-8
+    out = np.zeros(len(ap), dtype=np.float32)
+    wsum = np.zeros(len(ap), dtype=np.float32)
+    for i in range(nframes):
+        S = specs[i]
+        mag = np.abs(S)
+        snr = (mag ** 2) / nb2
+        gain = np.clip((snr - 1.0) / np.maximum(snr, 1e-8), 0.3, 1.0)
+        rec = np.fft.irfft(mag * gain * np.exp(1j * np.angle(S)), n=frame).astype(np.float32) * win
+        out[i * hop:i * hop + frame] += rec
+        wsum[i * hop:i * hop + frame] += win ** 2
+    res = out[:n] / (wsum[:n] + 1e-8)
+    return res.astype(np.float32)
+
+
+def denoise_chunk_if_noisy(audio, sample_rate: int = 16000, snr_threshold_db: float = DENOISE_SNR_THRESHOLD_DB):
+    """噪声门控：估计 SNR，>=阈值或太短 -> 原样返回(同一对象)；否则等长去噪。"""
+    a = np.asarray(audio, dtype=np.float32)
+    try:
+        if len(a) < int(0.3 * sample_rate):
+            return audio
+        if estimate_snr_db(a, sample_rate) >= snr_threshold_db:
+            return audio
+        return denoise_full(a, sample_rate)
+    except Exception:
+        return audio

@@ -1,6 +1,13 @@
 """
-模型管理器 - 统一管理 FunASR、CAM++ 和 Silero VAD 模型的加载
-从 InsightEye 移植，适配 smart-meeting-ai 配置
+CAM++ 声纹模型管理 - 用于说话人注册和声纹比对。
+
+核心：与 Pipeline3 (offline_pipeline.py) 中 Speaker3DEngine 使用完全相同的模型和提取逻辑，
+保证注册与推理的 embedding 空间一致。
+
+同时包含 ModelManager 类，统一管理实时转录所需的所有模型：
+- Silero VAD
+- FunASR (paraformer-large + ct-punc)
+- CAM++ zh / en
 """
 
 import os
@@ -12,6 +19,45 @@ import numpy as np
 import torch
 
 
+def _resolve_model_path(path: str) -> str:
+    """解析模型路径：
+    - 绝对路径：原样返回
+    - 相对路径（如 ./models/funasr, ../data）：相对于 backend/ 目录解析
+    - 模型名（如 paraformer-large）：原样返回，由 FunASR AutoModel 处理
+    """
+    if not path:
+        return ""
+    if os.path.isabs(path):
+        return path
+
+    # 始终以 backend/ 目录为基准，避免依赖 CWD
+    _backend_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+
+    # ./models/xxx 或 ../xxx → 相对于 backend/ 解析
+    if path.startswith("./") or path.startswith("../"):
+        return os.path.normpath(os.path.join(_backend_dir, path))
+
+    # 直接以 models/ funasr campplus silero 开头的相对路径 → 相对于 backend/
+    if any(path.startswith(p) for p in ("models/", "funasr", "campplus", "silero")):
+        return os.path.normpath(os.path.join(_backend_dir, path))
+
+    # 纯模型名/ID（funasr iic/speech_paraformer 等）→ 原样返回
+    return path
+
+
+def _get_local_model_dir() -> str:
+    from app.config import settings
+    path = settings.LOCAL_MODEL_DIR
+    if path:
+        resolved = _resolve_model_path(path)
+        if os.path.isabs(resolved):
+            return resolved
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(os.path.dirname(backend_dir), "models")
+
+
 @dataclass
 class ModelPaths:
     funasr_model: str
@@ -21,32 +67,22 @@ class ModelPaths:
     local_model_dir: str = ""
 
 
-def _resolve_model_path(path: str) -> str:
-    """将相对路径解析为绝对路径（相对于项目根目录 backend/../../）
-
-    模型文件在 ./models/ 下，相对路径如 "./models/funasr" 需要从项目根目录解析。
-    """
-    if not path:
-        return ""
-    # 如果是绝对路径直接返回
-    if os.path.isabs(path):
-        return path
-    # 相对路径：从 backend/app/ 的父目录（即项目根）解析
-    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend/app/
-    project_root = os.path.dirname(backend_dir)  # 项目根
-    resolved = os.path.normpath(os.path.join(project_root, path))
-    return resolved
-
-
 def _get_default_model_paths() -> ModelPaths:
     """从环境变量和配置获取默认模型路径（自动解析相对路径）"""
     from app.config import settings
+    from app.asr.config import (
+        FUNASR_MODEL_DIR,
+        CAMPPLUS_MODEL_DIR,
+        CAMPPLUS_EN_MODEL_DIR,
+        LOCAL_MODEL_DIR,
+        LOCAL_DEVICE,
+    )
 
-    funasr_dir = os.getenv("FUNASR_MODEL_DIR", settings.FUNASR_MODEL_DIR)
-    camp_dir = os.getenv("CAMPPLUS_MODEL_DIR", settings.CAMPPLUS_MODEL_DIR)
-    camp_en_dir = os.getenv("CAMPPLUS_EN_MODEL_DIR", settings.CAMPPLUS_EN_MODEL_DIR)
-    local_dir = os.getenv("LOCAL_MODEL_DIR", settings.LOCAL_MODEL_DIR)
-    device = os.getenv("LOCAL_DEVICE", settings.LOCAL_DEVICE or "cuda")
+    funasr_dir = os.getenv("FUNASR_MODEL_DIR", FUNASR_MODEL_DIR)
+    camp_dir = os.getenv("CAMPPLUS_MODEL_DIR", CAMPPLUS_MODEL_DIR)
+    camp_en_dir = os.getenv("CAMPPLUS_EN_MODEL_DIR", CAMPPLUS_EN_MODEL_DIR)
+    local_dir = os.getenv("LOCAL_MODEL_DIR", LOCAL_MODEL_DIR)
+    device = os.getenv("LOCAL_DEVICE", LOCAL_DEVICE or settings.LOCAL_DEVICE or "cuda")
 
     return ModelPaths(
         funasr_model=_resolve_model_path(funasr_dir),
@@ -55,20 +91,6 @@ def _get_default_model_paths() -> ModelPaths:
         device=device,
         local_model_dir=_resolve_model_path(local_dir),
     )
-
-
-def _get_local_model_dir() -> str:
-    """获取本地模型目录（自动解析相对路径）"""
-    from app.config import settings
-    path = settings.LOCAL_MODEL_DIR
-    if path:
-        resolved = _resolve_model_path(path)
-        if os.path.isabs(resolved):
-            return resolved
-    # 回退：从项目根目录解析 ./models
-    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    project_root = os.path.dirname(backend_dir)
-    return os.path.join(project_root, "models")
 
 
 class ModelManager:
@@ -110,48 +132,100 @@ class ModelManager:
             if self._initialized:
                 return
 
-            print("[ModelManager] 开始加载模型...", flush=True)
-            loop = asyncio.get_event_loop()
+        print("", flush=True)
+        print("[ModelManager] =========================================================", flush=True)
+        print("[ModelManager]              实时转录模型加载", flush=True)
+        print("[ModelManager] =========================================================", flush=True)
+        loop = asyncio.get_event_loop()
 
-            try:
-                await loop.run_in_executor(None, self._load_funasr)
-                print("[ModelManager] FunASR (含内置 VAD) 加载完成", flush=True)
-            except Exception as e:
-                print(f"[ModelManager] FunASR 加载失败: {e}", flush=True)
+        # ── Silero VAD ──────────────────────────────────────────────
+        print("[ModelManager] [1/5] Silero VAD (语音活动检测)...", flush=True)
+        _vad_ok = False
+        try:
+            await loop.run_in_executor(None, self._load_vad)
+            if self.vad_model is not None:
+                print("[ModelManager]       [PASS] Silero VAD 加载成功", flush=True)
+                _vad_ok = True
+            else:
+                print("[ModelManager]       [FAIL] Silero VAD 加载失败（模型为空）", flush=True)
+        except Exception as e:
+            print(f"[ModelManager]       [FAIL] Silero VAD 加载失败: {e}", flush=True)
 
-            try:
-                await loop.run_in_executor(None, self._load_vad)
-                print("[ModelManager] Silero VAD 模型加载完成", flush=True)
-            except Exception as e:
-                print(f"[ModelManager] Silero VAD 加载失败: {e}", flush=True)
+        # ── FunASR ASR ─────────────────────────────────────────────
+        print("[ModelManager] [2/5] FunASR ASR (语音识别)...", flush=True)
+        _asr_ok = False
+        try:
+            await loop.run_in_executor(None, self._load_funasr)
+            if self.funasr_model is not None:
+                print("[ModelManager]       [PASS] FunASR ASR 加载成功", flush=True)
+                _asr_ok = True
+            else:
+                print("[ModelManager]       [FAIL] FunASR ASR 加载失败（模型为空）", flush=True)
+        except Exception as e:
+            print(f"[ModelManager]       [FAIL] FunASR ASR 加载失败: {e}", flush=True)
 
-            try:
-                await loop.run_in_executor(None, self._load_campplus)
-                print("[ModelManager] CAM++ 中文声纹模型加载完成", flush=True)
-            except Exception as e:
-                print(f"[ModelManager] CAM++ 中文声纹模型加载失败: {e}", flush=True)
+        # ── 标点恢复模型 ───────────────────────────────────────────
+        print("[ModelManager] [3/5] 标点恢复模型 (ct-punc)...", flush=True)
+        try:
+            await loop.run_in_executor(None, self._load_punc_model)
+            if self.punc_model is not None:
+                print("[ModelManager]       [PASS] 标点恢复模型加载成功", flush=True)
+            else:
+                print("[ModelManager]       [SKIP] 标点恢复模型加载失败（可选）", flush=True)
+        except Exception as e:
+            print(f"[ModelManager]       [SKIP] 标点恢复模型加载失败: {e}", flush=True)
 
-            try:
-                await loop.run_in_executor(None, self._load_campplus_en)
-                print("[ModelManager] CAM++ 英文声纹模型加载完成", flush=True)
-            except Exception as e:
-                print(f"[ModelManager] CAM++ 英文声纹模型加载失败: {e}", flush=True)
+        # ── CAM++ 中文 ─────────────────────────────────────────────
+        print("[ModelManager] [4/5] CAM++ 声纹 (中文)...", flush=True)
+        _camp_ok = False
+        try:
+            await loop.run_in_executor(None, self._load_campplus)
+            if self.camp_model is not None:
+                print("[ModelManager]       [PASS] CAM++ 中文声纹模型加载成功", flush=True)
+                _camp_ok = True
+            else:
+                print("[ModelManager]       [FAIL] CAM++ 中文声纹模型加载失败（模型为空）", flush=True)
+        except Exception as e:
+            print(f"[ModelManager]       [FAIL] CAM++ 中文声纹模型加载失败: {e}", flush=True)
 
-            self._initialized = True
-            vad_status = "[PASS] 已加载" if self.vad_model is not None else "[FAIL] 未加载（无 VAD 模型）"
-            funasr_status = "[PASS] 已加载" if self.funasr_model is not None else "[FAIL] 未加载"
-            camp_status = "[PASS] 已加载" if self.camp_model is not None else "[FAIL] 未加载"
-            camp_en_status = "[PASS] 已加载" if self.camp_en_model is not None else "[SKIP] 英文模型未配置"
-            print("[ModelManager] ============================================", flush=True)
-            print(f"[ModelManager] 模型加载结果汇总：", flush=True)
-            print(f"[ModelManager]   VAD (Silero):        {vad_status}", flush=True)
-            print(f"[ModelManager]   ASR (FunASR):        {funasr_status}", flush=True)
-            print(f"[ModelManager]   声纹 (CAM++ zh):     {camp_status}", flush=True)
-            print(f"[ModelManager]   声纹 (CAM++ en):     {camp_en_status}", flush=True)
-            print("[ModelManager] ============================================", flush=True)
-            if self.vad_model is None:
-                print("[ModelManager] [!] 警告: VAD 模型未加载，实时转录将使用能量检测模式", flush=True)
-            print("[ModelManager] 模型初始化流程结束", flush=True)
+        # ── CAM++ 英文 ─────────────────────────────────────────────
+        print("[ModelManager] [5/5] CAM++ 声纹 (英文, 可选)...", flush=True)
+        try:
+            await loop.run_in_executor(None, self._load_campplus_en)
+            if self.camp_en_model is not None:
+                print("[ModelManager]       [PASS] CAM++ 英文声纹模型加载成功（可选）", flush=True)
+            else:
+                print("[ModelManager]       [SKIP] CAM++ 英文声纹模型未配置或加载失败（可选）", flush=True)
+        except Exception as e:
+            print(f"[ModelManager]       [SKIP] CAM++ 英文声纹模型加载失败: {e}", flush=True)
+
+        # ── 汇总 ───────────────────────────────────────────────────
+        _total = 5
+        _passed = sum(1 for _f in [_vad_ok, _asr_ok, _camp_ok] if _f)
+        print("", flush=True)
+        print("[ModelManager] =========================================================", flush=True)
+        print(f"[ModelManager]  加载结果汇总（共 {_total} 个核心模型）", flush=True)
+        print("[ModelManager] ---------------------------------------------------------", flush=True)
+        _vad_s = "[PASS]" if _vad_ok else "[FAIL]"
+        _asr_s = "[PASS]" if _asr_ok else "[FAIL]"
+        _camp_s = "[PASS]" if _camp_ok else "[FAIL]"
+        print(f"[ModelManager]   1. Silero VAD (语音活动检测)     {_vad_s}", flush=True)
+        print(f"[ModelManager]   2. FunASR ASR (语音识别)         {_asr_s}", flush=True)
+        print(f"[ModelManager]   3. 标点恢复模型 (ct-punc)       {'[PASS]' if self.punc_model else '[SKIP]'}  (可选)", flush=True)
+        print(f"[ModelManager]   4. CAM++ 中文声纹               {_camp_s}", flush=True)
+        print(f"[ModelManager]   5. CAM++ 英文声纹               {'[PASS]' if self.camp_en_model else '[SKIP]'}  (可选)", flush=True)
+        print("[ModelManager] ---------------------------------------------------------", flush=True)
+        print(f"[ModelManager]  通过: {_passed}/{_total}   设备: {self._paths.device}", flush=True)
+        print("[ModelManager] =========================================================", flush=True)
+
+        if not _vad_ok and not _asr_ok:
+            print("[ModelManager]  严重: VAD 和 ASR 均未加载，实时转录功能不可用", flush=True)
+        elif not _vad_ok:
+            print("[ModelManager]  警告: VAD 未加载，将使用能量检测模式", flush=True)
+        else:
+            print("[ModelManager]  就绪: 实时转录模型已加载完成，可以开始会议", flush=True)
+
+        self._initialized = True
 
     def _load_funasr(self) -> None:
         """加载 FunASR 模型"""
@@ -317,7 +391,7 @@ class ModelManager:
             print(f"[ModelManager] CAM++ 英文声纹模型加载失败: {e}")
 
     def _load_vad(self) -> None:
-        """加载 Silero VAD 模型（优先项目 ./models，其次 D:/InsightEye/models，最后联网下载）"""
+        """加载 Silero VAD 模型（优先项目 ./models，其次联网下载）"""
         try:
             torch.set_num_threads(1)
 
@@ -329,29 +403,15 @@ class ModelManager:
             local_v1 = os.path.join(local_master_dir, "files", "silero-vad", "silero_vad.jit")
             local_v2 = os.path.join(local_master_dir, "src", "silero_vad", "data", "silero_vad.jit")
 
-            # 优先级2: D:/InsightEye/models（兼容旧路径）
-            insighteye_vad = os.path.join(
-                os.getenv("INSIGHTEYE_MODELS", "D:/InsightEye/models"),
-                "silero-vad", "snakers4_silero-vad_master"
-            )
-            insighteye_jit = os.path.join(
-                insighteye_vad, "src", "silero_vad", "data", "silero_vad.jit"
-            )
-
             model, utils = None, None
 
-            # 尝试加载顺序：项目 models > InsightEye models > 联网下载
             if os.path.exists(local_v1):
                 print(f"[ModelManager] 发现项目本地 Silero VAD: {local_v1}", flush=True)
                 os.environ["TORCH_HUB_DIR"] = os.path.join(_get_local_model_dir(), "silero-vad")
-                # 对齐 InsightEye：用与 FunASR/CAM++ 相同的设备
                 model, utils = torch.hub.load(repo_or_dir=local_master_dir, model='silero_vad', trust_repo=True, map_location=self._paths.device)
             elif os.path.exists(local_v2):
                 print(f"[ModelManager] 发现项目本地 Silero VAD: {local_v2}", flush=True)
                 model, utils = self._load_silero_from_local(os.path.join(local_master_dir, "src", "silero_vad"))
-            elif os.path.exists(insighteye_jit):
-                print(f"[ModelManager] 发现 InsightEye Silero VAD: {insighteye_jit}", flush=True)
-                model, utils = self._load_silero_from_local(os.path.join(insighteye_vad, "src", "silero_vad"))
             else:
                 print(f"[ModelManager] 未找到本地 Silero VAD，尝试联网下载...", flush=True)
                 torch_hub_dir = os.path.join(_get_local_model_dir(), "silero-vad")
@@ -372,14 +432,13 @@ class ModelManager:
             print(f"[ModelManager] Silero VAD 模型加载失败: {e}", flush=True)
 
     def _load_silero_from_local(self, src_dir: str):
-        """直接从本地 .jit 文件加载 Silero VAD（设备与 CAM++ 一致）"""
+        """直接从本地 .jit 文件加载 Silero VAD"""
         jit_file = os.path.join(src_dir, "data", "silero_vad.jit")
         if not os.path.exists(jit_file):
             raise FileNotFoundError(f"找不到 Silero VAD .jit 文件: {jit_file}")
 
         print(f"[ModelManager] 直接加载本地 .jit 模型: {jit_file}", flush=True)
 
-        # 对齐 InsightEye：与 FunASR/CAM++ 用同一设备
         target_device = self._paths.device
         try:
             model = torch.jit.load(jit_file, map_location=target_device)
@@ -425,8 +484,8 @@ class ModelManager:
 class SpeakerEmbeddingExtractor:
     """说话人声纹特征提取器，使用 CAM++ 模型"""
 
-    def __init__(self, camp_model, device="cuda"):
-        self.camp_model = camp_model
+    def __init__(self, model, device: str = "cuda"):
+        self.model = model
         self.device = device
         self.sample_rate = 16000
 
@@ -438,25 +497,25 @@ class SpeakerEmbeddingExtractor:
         Returns:
             192 维声纹向量
         """
-        if self.camp_model is None:
+        if self.model is None:
             raise RuntimeError("CAM++ 模型未加载")
 
         try:
             import torch
             from funasr.models.campplus.utils import extract_feature
-            from funasr.utils.load_utils import load_audio_text_image_video
+
+            if audio_data.dtype != np.float32:
+                audio_data = audio_data.astype(np.float32)
 
             audio_tensor = torch.from_numpy(audio_data).float()
-            audio_list = [audio_tensor]
-
-            features_padded, feature_lengths, feature_times = extract_feature(audio_list)
+            features, _, _ = extract_feature([audio_tensor])
             try:
-                features_padded = features_padded.to(device=self.device)
+                features = features.to(device=self.device)
             except AssertionError:
                 self.device = "cpu"
-                features_padded = features_padded.to(device="cpu")
+                features = features.to(device="cpu")
 
-            embedding = self.camp_model.forward(features_padded)
+            embedding = self.model(features)
 
             if len(embedding.shape) > 2:
                 embedding = embedding.squeeze(0)
@@ -495,44 +554,9 @@ class SpeakerEmbeddingExtractor:
         similarity = float(np.dot(emb1_norm, emb2_norm))
         return (similarity + 1.0) / 2.0
 
-    def _detect_speech_ranges(self, audio_data: np.ndarray) -> list[tuple[int, int]]:
-        """用能量阈值检测音频中的语音区间"""
-        win_size = int(self.sample_rate * 0.025)
-        win_step = int(win_size * 0.5)
-        n_samples = len(audio_data)
-        energy_threshold = 0.01
-        speech_ranges = []
-        in_speech = False
-        speech_start = 0
-        i = 0
-        while i * win_step < n_samples:
-            start = i * win_step
-            end = min(start + win_size, n_samples)
-            frame = audio_data[start:end]
-            energy = float(np.sqrt(np.mean(frame ** 2)))
-            if energy > energy_threshold:
-                if not in_speech:
-                    speech_start = start
-                    in_speech = True
-            else:
-                if in_speech:
-                    speech_ranges.append((speech_start, end))
-                    in_speech = False
-            i += 1
-        if in_speech:
-            speech_ranges.append((speech_start, n_samples))
-        if not speech_ranges:
-            return []
-        merged = [speech_ranges[0]]
-        for start, end in speech_ranges[1:]:
-            if start - merged[-1][1] < int(self.sample_rate * 0.1):
-                merged[-1] = (merged[-1][0], end)
-            else:
-                merged.append((start, end))
-        return merged
-
     def extract_multi_window(
         self, audio_data: np.ndarray, n_windows: int = 3, window_step_ratio: float = 0.25,
+        sample_rate: int = 16000,
     ) -> list[tuple[np.ndarray, float, bool]]:
         """从音频中提取多个滑动窗口的声纹向量"""
         n_samples = len(audio_data)
@@ -544,7 +568,7 @@ class SpeakerEmbeddingExtractor:
                 return [(emb, 0.0, True)]
             except Exception:
                 return []
-        speech_ranges = self._detect_speech_ranges(audio_data)
+        speech_ranges = self._detect_speech_ranges(audio_data, sample_rate)
         if speech_ranges and len(speech_ranges) >= 2:
             last_start, last_end = speech_ranges[-1]
             speech_len = last_end - last_start
@@ -576,9 +600,9 @@ class SpeakerEmbeddingExtractor:
     def extract_fused(
         self, audio_data: np.ndarray, n_windows: int = 3,
         window_step_ratio: float = 0.25, fusion_method: str = "mean",
+        sample_rate: int = 16000,
     ) -> tuple[np.ndarray, dict]:
-        """提取多窗口声纹并融合为单一向量"""
-        windows = self.extract_multi_window(audio_data, n_windows, window_step_ratio)
+        windows = self.extract_multi_window(audio_data, n_windows, window_step_ratio, sample_rate)
         valid = [(emb, ts) for emb, ts, ok in windows if ok]
         if not valid:
             raise ValueError("所有窗口均提取失败")
@@ -608,6 +632,73 @@ class SpeakerEmbeddingExtractor:
             "timestamps": timestamps,
         }
         return fused, stats
+
+    def _detect_speech_ranges(self, audio_data: np.ndarray, sample_rate: int = 16000) -> list[tuple[int, int]]:
+        win_size = int(sample_rate * 0.025)
+        win_step = int(win_size * 0.5)
+        n_samples = len(audio_data)
+        energy_threshold = 0.01
+        speech_ranges = []
+        in_speech = False
+        speech_start = 0
+        i = 0
+        while i * win_step < n_samples:
+            start = i * win_step
+            end = min(start + win_size, n_samples)
+            frame = audio_data[start:end]
+            energy = float(np.sqrt(np.mean(frame ** 2)))
+            if energy > energy_threshold:
+                if not in_speech:
+                    speech_start = start
+                    in_speech = True
+            else:
+                if in_speech:
+                    speech_ranges.append((speech_start, end))
+                    in_speech = False
+            i += 1
+        if in_speech:
+            speech_ranges.append((speech_start, n_samples))
+        if not speech_ranges:
+            return []
+        merged = [speech_ranges[0]]
+        for start, end in speech_ranges[1:]:
+            if start - merged[-1][1] < int(sample_rate * 0.1):
+                merged[-1] = (merged[-1][0], end)
+            else:
+                merged.append((start, end))
+        return merged
+
+
+def load_campplus_model(device: Optional[str] = None) -> tuple:
+    """加载 CAM++ 模型，返回 (model, device)。"""
+    import torch
+    from funasr.models.campplus.model import CAMPPlus
+
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    model_dir = os.path.join(backend_dir, "models", "iic", "speech_campplus_sv_zh-cn_16k-common")
+    ckpt_path = os.path.join(model_dir, "campplus_cn_common.bin")
+
+    model = CAMPPlus(
+        feat_dim=80,
+        embedding_size=192,
+        growth_rate=32,
+        bn_size=4,
+        init_channels=128,
+        config_str="batchnorm-relu",
+        memory_efficient=True,
+        output_level="segment",
+    )
+    state_dict = torch.load(ckpt_path, map_location="cpu")
+    if "state_dict" in state_dict:
+        state_dict = state_dict["state_dict"]
+    model.load_state_dict(state_dict, strict=False)
+    model.to(device)
+    model.eval()
+    print(f"[SpeakerEmbedding] CAM++ 加载完成，设备: {device}")
+    return model, device
 
 
 def get_model_manager() -> ModelManager:

@@ -55,18 +55,18 @@ class TestCallOllama(unittest.TestCase):
             "ollama_client.requests.post",
             side_effect=requests.ConnectionError,
         ):
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises(RuntimeError) as cm:
                 call_ollama(OLLAMA_CONFIG, SYSTEM_PROMPT, TRANSCRIPT)
-        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("Cannot reach Ollama", str(cm.exception))
 
     def test_timeout(self) -> None:
         with patch(
             "ollama_client.requests.post",
             side_effect=requests.Timeout,
         ):
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises(RuntimeError) as cm:
                 call_ollama(OLLAMA_CONFIG, SYSTEM_PROMPT, TRANSCRIPT)
-        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("timed out", str(cm.exception))
 
     def test_http_error(self) -> None:
         mock_resp = unittest.mock.Mock()
@@ -76,9 +76,9 @@ class TestCallOllama(unittest.TestCase):
             "500 Server Error"
         )
         with patch("ollama_client.requests.post", return_value=mock_resp):
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises(RuntimeError) as cm:
                 call_ollama(OLLAMA_CONFIG, SYSTEM_PROMPT, TRANSCRIPT)
-        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("HTTP", str(cm.exception))
 
 
 class TestCallOpenAICompatible(unittest.TestCase):
@@ -118,9 +118,9 @@ class TestCallOpenAICompatible(unittest.TestCase):
             "ollama_client.requests.post",
             side_effect=requests.ConnectionError,
         ):
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises(RuntimeError) as cm:
                 call_ollama(OPENAI_CONFIG, SYSTEM_PROMPT, TRANSCRIPT)
-        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("Cannot reach API", str(cm.exception))
 
     def test_http_error(self) -> None:
         mock_resp = unittest.mock.Mock()
@@ -128,9 +128,9 @@ class TestCallOpenAICompatible(unittest.TestCase):
         mock_resp.text = "Unauthorized"
         mock_resp.raise_for_status.side_effect = requests.HTTPError("401")
         with patch("ollama_client.requests.post", return_value=mock_resp):
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises(RuntimeError) as cm:
                 call_ollama(OPENAI_CONFIG, SYSTEM_PROMPT, TRANSCRIPT)
-        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("HTTP", str(cm.exception))
 
 
 if __name__ == "__main__":

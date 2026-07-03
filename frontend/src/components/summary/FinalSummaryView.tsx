@@ -11,11 +11,11 @@ export default function FinalSummaryView({ summary }: { summary: FinalSummary })
       </div>
 
       {/* 关键决策 */}
-      {summary.key_decisions.length > 0 && (
+      {(summary.key_decisions?.length ?? 0) > 0 && (
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-3">关键决策</h3>
           <ul className="space-y-2">
-            {summary.key_decisions.map((decision, i) => (
+            {summary.key_decisions!.map((decision, i) => (
               <li key={i} className="flex items-start gap-2">
                 <span className="text-blue-600 font-bold mt-0.5">{i + 1}.</span>
                 <span className="text-gray-700">{decision}</span>

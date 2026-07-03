@@ -28,6 +28,124 @@ SUMMARIES_DIR = Path(__file__).resolve().parents[2] / "summaries"
 class SummaryService:
     def __init__(self):
         self.meetingsummary_dir = MEETINGSUMMARY_DIR
+        self._free_ollama_gpu_cache()
+        self._check_ollama_device()
+
+    def _free_ollama_gpu_cache(self):
+        """每次启动总结前，停止 Ollama 中已加载的模型，释放 GPU 显存。
+
+        Ollama 默认会缓存已加载的模型（占用大量 VRAM），如果不主动清理，
+        后续 Pipeline 可能因显存不足而 fallback 到 CPU。
+
+        流程：
+        1. 查询当前 GPU 进程，找出 Ollama 相关进程
+        2. 获取 Ollama 当前加载的模型名称
+        3. 逐个 stop，并等待显存实际释放
+        4. 验证显存，必要时重试
+        """
+        import subprocess
+        import time
+
+        # ── Step 1: 检查当前 GPU 占用 ───────────────────────────
+        result = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=pid,used_memory,name", "--format=csv,noheader"],
+            capture_output=True, text=True
+        )
+        ollama_procs = [
+            l.strip() for l in result.stdout.strip().split("\n")
+            if l.strip() and ("ollama" in l.lower() or "llama" in l.lower())
+        ]
+        if not ollama_procs:
+            print(f"[Ollama] 当前无 Ollama GPU 进程，跳过清理", flush=True)
+            return
+
+        for line in ollama_procs:
+            parts = line.split(",")
+            mem_mb = int(parts[1].strip().split()[0]) if len(parts) > 1 else 0
+            print(f"[Ollama] 发现已缓存模型 (占用 {mem_mb} MB 显存)，正在释放...", flush=True)
+
+        # ── Step 2: 获取当前运行的模型名称 ──────────────────────
+        result = subprocess.run(
+            ["ollama", "ps", "--format", "json"],
+            capture_output=True, text=True
+        )
+        running_models = []
+        if result.returncode == 0 and result.stdout.strip():
+            try:
+                import json as json_mod
+                ollama_data = json_mod.loads(result.stdout)
+                if isinstance(ollama_data, list):
+                    for proc in ollama_data:
+                        model_name = proc.get("name", "")
+                        if model_name:
+                            running_models.append(model_name)
+                elif isinstance(ollama_data, dict):
+                    model_name = ollama_data.get("name", "")
+                    if model_name:
+                        running_models.append(model_name)
+            except Exception:
+                pass
+
+        if not running_models:
+            # fallback: 从 ollama ps 文本解析
+            ps_result = subprocess.run(["ollama", "ps"], capture_output=True, text=True)
+            lines = [l.strip() for l in ps_result.stdout.strip().split("\n") if l.strip() and l.strip().split()[0] not in ("NAME", "name")]
+            for line in lines:
+                model_name = line.split()[0] if line.split() else None
+                if model_name and model_name not in running_models:
+                    running_models.append(model_name)
+
+        # ── Step 3: 逐个 stop，并等待显存释放 ───────────────────
+        for model_name in running_models:
+            print(f"[Ollama] 停止模型: {model_name}", flush=True)
+            stop_result = subprocess.run(
+                ["ollama", "stop", model_name],
+                capture_output=True, text=True
+            )
+            if stop_result.returncode != 0:
+                print(f"[Ollama] stop {model_name} 返回: {stop_result.stderr.strip()}", flush=True)
+
+        # ── Step 4: 等待显存实际释放（最多等待 15 秒）──────────
+        max_wait = 15
+        for attempt in range(max_wait):
+            time.sleep(1)
+            result_check = subprocess.run(
+                ["nvidia-smi", "--query-gpu=memory.used,memory.free",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True
+            )
+            if result_check.returncode == 0:
+                print(f"[Ollama] 显存状态: {result_check.stdout.strip()}", flush=True)
+                # 等待显存下降到合理水平（基本只剩系统占用）
+                used_mb = int(result_check.stdout.strip().split(",")[0].strip())
+                if used_mb < 3000:
+                    print(f"[Ollama] ✓ 显存已释放", flush=True)
+                    return
+
+        # 最终验证
+        result_final = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.used,memory.free",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True
+        )
+        print(f"[Ollama] 清理完成，当前: {result_final.stdout.strip()}", flush=True)
+
+    def _check_ollama_device(self):
+        """检查 Ollama 当前模型运行在 GPU 还是 CPU 上"""
+        import subprocess
+        result = subprocess.run(
+            ["ollama", "ps"],
+            capture_output=True, text=True
+        )
+        lines = [l.strip() for l in result.stdout.strip().split("\n") if l.strip()]
+        if len(lines) > 1:
+            proc_line = lines[1]
+            cols = " ".join(proc_line.split()).split()
+            model_name = cols[0] if cols else "?"
+            processor = " ".join(cols[4:6]) if len(cols) > 5 else "?"
+            print(f"[Ollama] ✓ {model_name} 运行在 {processor} 上", flush=True)
+        else:
+            print(f"[Ollama] 当前无已加载模型（将在首次请求时加载到 GPU）", flush=True)
 
     async def summarize_period(
         self,
@@ -57,8 +175,8 @@ class SummaryService:
             transcript_text,
             output_dir=output_dir,
             prefix=f"period_{meeting_id[:8]}",
-            skip_eval=True,
-            skip_completeness=True,
+            skip_eval=False,
+            skip_completeness=False,
         )
 
         # 提取 bullet_points（从 summary dict 的 discussion_points 映射）
@@ -113,8 +231,8 @@ class SummaryService:
             transcript_text,
             output_dir=output_dir,
             prefix=f"final_{meeting_id[:8]}",
-            skip_eval=True,
-            skip_completeness=True,
+            skip_eval=False,
+            skip_completeness=False,
         )
 
         if not result:
@@ -179,11 +297,6 @@ class SummaryService:
             print(f"[SummaryService] meetingsummary config.json 不存在: {config_path}")
             return None
 
-        config_path = self.meetingsummary_dir / "config.json"
-        if not config_path.exists():
-            print(f"[SummaryService] meetingsummary config.json 不存在: {config_path}")
-            return None
-
         print(f"[SummaryService] 写入转写文件...", flush=True)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -191,13 +304,27 @@ class SummaryService:
         input_file = output_dir / f"{prefix}_input.txt"
         input_file.write_text(transcript_text, encoding="utf-8")
 
+        # 确定 Python 解释器（使用 venv 的，确保依赖可用）
+        import sys as _sys
+        python_exe = _sys.executable
+
+        # 构建 PYTHONPATH，确保 meetingsummary 内部导入和 backend 导入都能工作
+        import os as _os
+        _sep = _os.pathsep
+        _env = _os.environ.copy()
+        _env["PYTHONPATH"] = _sep.join([
+            str(self.meetingsummary_dir),
+            str(self.meetingsummary_dir.parent),
+            str(self.meetingsummary_dir.parent / "backend"),
+        ])
+
         cmd = [
-            "python",
+            python_exe,
             str(self.meetingsummary_dir / "main.py"),
             "-i", str(input_file),
             "-o", str(output_dir),
             "--prefix", prefix,
-            "--no-map-reduce",  # 阶段总结文本短，直接摘要
+            # 不使用 --no-map-reduce，让 Map-Reduce 自动处理长文本
             "--skip-completeness" if skip_completeness else "",
             "--skip-eval" if skip_eval else "",
             "--skip-actions" if skip_actions else "",
@@ -205,24 +332,28 @@ class SummaryService:
         cmd = [c for c in cmd if c]  # 过滤空字符串
 
         print(f"[SummaryService] subprocess 调用: {' '.join(cmd)}", flush=True)
+        print(f"[SummaryService] PYTHONPATH={_env['PYTHONPATH']}", flush=True)
         try:
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True,
-                timeout=180,
+                text=True,  # 无超时限制，等待 LLM 完全生成
                 cwd=str(self.meetingsummary_dir),
+                env=_env,
             )
             print(f"[SummaryService] subprocess returncode={result.returncode}", flush=True)
             print(f"[SummaryService] meetingsummary stdout:\n{result.stdout}")
             if result.stderr:
                 print(f"[SummaryService] meetingsummary stderr:\n{result.stderr}")
         except subprocess.TimeoutExpired:
-            print(f"[SummaryService] meetingsummary 超时（180s）")
+            print(f"[SummaryService] meetingsummary 超时（600s）")
             return None
         except Exception as e:
             print(f"[SummaryService] meetingsummary 调用失败: {e}")
             return None
+
+        # ── Ollama 调用完毕后立即释放显存 ──────────────────────────
+        self._free_ollama_gpu_cache()
 
         # 读取输出的 JSON
         import datetime
@@ -249,17 +380,25 @@ class SummaryService:
         self,
         transcript_lines: list[dict],
         prefix: str = "summary",
+        subdir: str = "period",
     ) -> dict | None:
         """
         给定转写行列表，调用 meetingsummary CLI，返回原始 JSON 结果。
         供 asyncio.to_thread() 在线程池中同步调用，不阻塞事件循环。
         """
-        output_dir = SUMMARIES_DIR / "period"
+        output_dir = SUMMARIES_DIR / subdir
         output_dir.mkdir(parents=True, exist_ok=True)
-        transcript_text = "\n".join(
-            f"{line.get('speaker', '未知')}：{line.get('text', '')}"
-            for line in transcript_lines
-        )
+        lines_out = []
+        for line in transcript_lines:
+            speaker = line.get("speaker", "未知")
+            text = line.get("text", "")
+            top3 = line.get("top3")
+            if top3:
+                top3_str = " | ".join(top3)
+                lines_out.append(f"{speaker} [Top3: {top3_str}]：{text}")
+            else:
+                lines_out.append(f"{speaker}：{text}")
+        transcript_text = "\n".join(lines_out)
         input_file = output_dir / f"{prefix}_input.txt"
         input_file.write_text(transcript_text, encoding="utf-8")
 
@@ -267,8 +406,8 @@ class SummaryService:
             transcript_text,
             output_dir=output_dir,
             prefix=prefix,
-            skip_eval=True,
-            skip_completeness=True,
+            skip_eval=False,
+            skip_completeness=False,
         )
         if result is None:
             return None

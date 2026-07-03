@@ -9,6 +9,7 @@ import {
   searchSpeakers,
   registerSpeaker,
   deleteSpeaker,
+  supplementSpeakerAudio,
   getSpeakerStats,
   type SpeakerProfile,
   type SpeakerStats,
@@ -37,17 +38,17 @@ const REGISTRATION_TEXTS = [
 ]
 
 // 推荐录音时长范围（秒）
-const MIN_RECORDING_SECONDS = 3
-const MAX_RECORDING_SECONDS = 10
+const MIN_RECORDING_SECONDS = 2
+const MAX_RECORDING_SECONDS = 15
 
 // 声纹注册质量要求
 const QUALITY_REQUIREMENTS = {
-  MIN_SAMPLES: 2,           // 最少样本数量
+  MIN_SAMPLES: 1,           // 最少样本数量
   MAX_SAMPLES: 5,            // 最多样本数量
-  MIN_SAMPLE_DURATION: 3,   // 单个样本最短时长（秒）
-  MAX_SAMPLE_DURATION: 10,  // 单个样本最长时长（秒）
-  MIN_TOTAL_DURATION: 6,    // 最短总录音时长（秒）
-  MIN_QUALITY_SCORE: 0.4,   // 最低质量分数
+  MIN_SAMPLE_DURATION: 2,   // 单个样本最短时长（秒）
+  MAX_SAMPLE_DURATION: 15,  // 单个样本最长时长（秒）
+  MIN_TOTAL_DURATION: 2,    // 最短总录音时长（秒）
+  MIN_QUALITY_SCORE: 0.2,   // 最低质量分数（20%）
 }
 
 // 质量等级描述
@@ -60,12 +61,6 @@ const QUALITY_LEVELS = [
 
 function getQualityLevel(score: number) {
   return QUALITY_LEVELS.find(level => score >= level.min) || QUALITY_LEVELS[QUALITY_LEVELS.length - 1]
-}
-
-// 计算总录音时长
-function getTotalRecordingDuration(samples: File[], currentTime: number): number {
-  const completedDuration = samples.length * ((MIN_RECORDING_SECONDS + MAX_RECORDING_SECONDS) / 2)
-  return completedDuration + currentTime
 }
 
 export default function SpeakerDbPage() {
@@ -241,7 +236,10 @@ export default function SpeakerDbPage() {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) setRegAudioFile(file)
+    if (file) {
+      setRegAudioFile(file)
+      setRegSamples(prev => [...prev, file])
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -321,6 +319,25 @@ export default function SpeakerDbPage() {
     }
   }
 
+  const handleSupplement = (speakerId: string) => {
+    // 创建隐藏的文件 input 触发选择音频
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'audio/*,.wav,.mp3,.m4a,.ogg,.webm,.flac'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      try {
+        const result = await supplementSpeakerAudio(speakerId, file)
+        alert(result.message)
+        await loadData()
+      } catch (err: any) {
+        alert('补充失败: ' + (err.message || err))
+      }
+    }
+    input.click()
+  }
+
   const resetForm = () => {
     setRegName('')
     setRegSpeakerId('')
@@ -370,7 +387,7 @@ export default function SpeakerDbPage() {
                 placeholder="搜索姓名..."
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
               />
               <button
                 onClick={() => loadData()}
@@ -469,12 +486,20 @@ export default function SpeakerDbPage() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDelete(selectedSpeaker.speaker_id)}
-                  className="text-red-600 hover:text-red-700 text-sm px-3 py-1 border border-red-200 rounded-lg hover:bg-red-50"
-                >
-                  删除
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSupplement(selectedSpeaker.speaker_id)}
+                    className="text-indigo-600 hover:text-indigo-700 text-sm px-3 py-1 border border-indigo-200 rounded-lg hover:bg-indigo-50"
+                  >
+                    补充音频
+                  </button>
+                  <button
+                    onClick={() => handleDelete(selectedSpeaker.speaker_id)}
+                    className="text-red-600 hover:text-red-700 text-sm px-3 py-1 border border-red-200 rounded-lg hover:bg-red-50"
+                  >
+                    删除
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-4 gap-4">
@@ -596,7 +621,7 @@ export default function SpeakerDbPage() {
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
                     placeholder="输入员工姓名"
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
                     required
                   />
                 </div>
@@ -609,7 +634,7 @@ export default function SpeakerDbPage() {
                     value={regSpeakerId}
                     onChange={(e) => setRegSpeakerId(e.target.value)}
                     placeholder="留空自动生成"
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
                   />
                 </div>
               </div>
@@ -622,7 +647,7 @@ export default function SpeakerDbPage() {
                   <select
                     value={regRole}
                     onChange={(e) => setRegRole(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
                   >
                     {ROLE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -638,7 +663,7 @@ export default function SpeakerDbPage() {
                     value={regDepartment}
                     onChange={(e) => setRegDepartment(e.target.value)}
                     placeholder="如：研发部"
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
                   />
                 </div>
               </div>
@@ -827,7 +852,7 @@ export default function SpeakerDbPage() {
                     <label className="block">
                       <input
                         type="file"
-                        accept="audio/*"
+                        accept="audio/*,.m4a,.aac,.ogg,.mp3,.wav,.flac"
                         onChange={handleFileUpload}
                         className="hidden"
                       />
@@ -848,7 +873,7 @@ export default function SpeakerDbPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                             </svg>
                             <p className="text-sm text-gray-500">点击或拖拽上传音频文件</p>
-                            <p className="text-xs text-gray-400 mt-1">支持 WAV / MP3 / OGG / FLAC</p>
+                            <p className="text-xs text-gray-400 mt-1">支持 WAV / MP3 / OGG / FLAC / M4A</p>
                           </div>
                         )}
                       </div>

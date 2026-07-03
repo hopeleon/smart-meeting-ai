@@ -11,6 +11,7 @@ interface MeetingState {
   setMeetings: (meetings: Meeting[]) => void
   setCurrentMeeting: (meeting: Meeting | null) => void
   addTranscript: (segment: TranscriptSegment) => void
+  upsertTranscript: (segment: TranscriptSegment) => void
   setTranscripts: (segments: TranscriptSegment[]) => void
   addPeriodSummary: (summary: PeriodSummary) => void
   setPeriodSummaries: (summaries: PeriodSummary[]) => void
@@ -35,6 +36,21 @@ export const useMeetingStore = create<MeetingState>((set) => ({
         (s) => `${s.speaker_id}|${s.text}|${s.start_ms}` === key,
       )
       if (exists) return state
+      return { transcripts: [...state.transcripts, segment] }
+    }),
+  // 流式覆盖：同一 (speaker_id, start_ms) 的行原地替换（whisper 流式逐步增长用），
+  // 避免把一句话的每次增长都追加成新行。
+  upsertTranscript: (segment: TranscriptSegment) =>
+    set((state) => {
+      const key = segment.segment_id || segment.id || `${segment.speaker_id}|${segment.start_ms}`
+      const idx = state.transcripts.findIndex(
+        (s) => (s.segment_id || s.id || `${s.speaker_id}|${s.start_ms}`) === key,
+      )
+      if (idx >= 0) {
+        const next = state.transcripts.slice()
+        next[idx] = { ...next[idx], ...segment }
+        return { transcripts: next }
+      }
       return { transcripts: [...state.transcripts, segment] }
     }),
   setTranscripts: (segments) => set({ transcripts: segments }),

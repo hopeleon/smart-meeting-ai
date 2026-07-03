@@ -5,6 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>智能会议记录平台</title>
+    <script>
+      // 自动从 HTTP 升级到 HTTPS（非 localhost 时）
+      // getDisplayMedia / getUserMedia 在 HTTPS 下才能用
+      (function () {
+        try {
+          var host = window.location.hostname;
+          var isLocal = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+          if (!isLocal && window.location.protocol === 'http:' && window.location.hostname) {
+            var httpsUrl = 'https://' + window.location.host + window.location.pathname + window.location.search + window.location.hash;
+            window.location.replace(httpsUrl);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="bg-dark text-white">
     <div id="root"></div>

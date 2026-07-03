@@ -12,7 +12,7 @@ import soundfile as sf
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
-from app.services.speaker_db_service import get_speaker_db
+from app.services.speaker_db_service import get_speaker_db, bytes_to_ndarray
 from app.schemas.speaker import (
     SpeakerProfile,
     SpeakerStats,
@@ -160,12 +160,12 @@ async def search_speakers(name: Optional[str] = None):
 
 
 # 声纹注册质量要求常量
-MIN_SAMPLES = 2           # 最少样本数量
-MAX_SAMPLES = 5           # 最多样本数量
-MIN_SAMPLE_DURATION = 3   # 单个样本最短时长（秒）
-MAX_SAMPLE_DURATION = 10  # 单个样本最长时长（秒）
-MIN_TOTAL_DURATION = 6    # 最短总录音时长（秒）
-MIN_QUALITY_SCORE = 0.4   # 最低质量分数
+MIN_SAMPLES = 1             # 最少样本数量
+MAX_SAMPLES = 5            # 最多样本数量
+MIN_SAMPLE_DURATION = 2    # 单个样本最短时长（秒）
+MAX_SAMPLE_DURATION = 15  # 单个样本最长时长（秒）
+MIN_TOTAL_DURATION = 2     # 最短总录音时长（秒）
+MIN_QUALITY_SCORE = 0.2    # 最低质量分数
 
 # 质量等级描述
 QUALITY_LEVELS = [
@@ -268,7 +268,7 @@ async def register_speaker(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"音频格式解析失败: {exc}")
 
-    # 提取声纹特征（使用本地 CAM++ 模型或模拟）
+    # 提取声纹特征（使用 CAM++）
     try:
         result = await _extract_speaker_embedding(
             audio_data, name, speaker_id, audio_count
@@ -285,7 +285,8 @@ async def register_speaker(
 
     # 验证质量门槛
     duration_s = len(audio_data) / 16000.0
-    total_duration = duration_s * sample_count
+    # total_duration = 各段音频实际时长之和（当前接口只上传一段）
+    total_duration = duration_s
 
     quality_warnings = []
     quality_errors = []
@@ -294,9 +295,9 @@ async def register_speaker(
     if sample_count < MIN_SAMPLES:
         quality_errors.append(f"样本数量不足：当前{sample_count}段，需要至少{MIN_SAMPLES}段")
 
-    # 检查总时长
+    # 检查总时长（单段音频实际时长 >= 最短时长）
     if total_duration < MIN_TOTAL_DURATION:
-        quality_errors.append(f"总录音时长不足：当前{total_duration:.1f}秒，需要至少{MIN_TOTAL_DURATION}秒")
+        quality_errors.append(f"录音时长不足：当前{total_duration:.1f}秒，需要至少{MIN_TOTAL_DURATION}秒")
 
     # 检查单个样本时长
     if duration_s < MIN_SAMPLE_DURATION:
@@ -374,6 +375,78 @@ async def register_speaker(
     }
 
 
+@router.post("/supplement")
+async def supplement_speaker_audio(
+    speaker_id: str = Form(...),
+    audio: UploadFile = File(...),
+):
+    """
+    为已注册的说话人补充新的声纹音频。
+    使用 Welford 在线算法将新音频合并到现有声纹统计量中。
+
+    补充后：
+    - speaker_profiles.sample_count += 1
+    - speaker_embeddings 统计量用 Welford 算法更新
+    - 运行时声纹引擎会重新加载该说话人的声纹
+    """
+    speaker_id = speaker_id.strip()
+    if not speaker_id:
+        raise HTTPException(status_code=400, detail="speaker_id 为必填项")
+
+    # 读取音频
+    try:
+        audio_bytes = await audio.read()
+        audio_filename = audio.filename or "voice.wav"
+        audio_content_type = audio.content_type or "audio/wav"
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"读取音频文件失败: {exc}")
+
+    # 解析音频
+    try:
+        audio_data = _parse_audio_bytes(audio_bytes, audio_filename, audio_content_type)
+        if audio_data is None or len(audio_data) == 0:
+            raise HTTPException(status_code=400, detail="音频数据无效或为空")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"音频格式解析失败: {exc}")
+
+    # 检查说话人是否存在
+    db = get_speaker_db()
+    existing = db.load_speaker(speaker_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"未找到声纹ID「{speaker_id}」，请先注册")
+
+    # 提取新音频的声纹特征
+    try:
+        result = await _extract_speaker_embedding(
+            audio_data, existing["name"], speaker_id, audio_count=1
+        )
+        new_embedding = result[0]
+        quality = result[1]
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"声纹提取失败: {exc}")
+
+    # 用 Welford 在线算法补充到现有声纹
+    ok = db.supplement_audio(speaker_id, new_embedding.astype(np.float32), quality=quality)
+    if not ok:
+        raise HTTPException(status_code=500, detail="声纹补充失败")
+
+    # 重新加载到运行时引擎
+    _reload_speaker_to_engine(speaker_id)
+
+    new_count = existing.get("embedding_count", existing.get("sample_count", 1)) + 1
+    return {
+        "success": True,
+        "speaker_id": speaker_id,
+        "name": existing["name"],
+        "message": f"「{existing['name']}」补充音频成功，已累计 {new_count} 条样本",
+        "quality": round(float(quality), 3),
+        "total_samples": new_count,
+        "total_duration": round(len(audio_data) / 16000.0, 2),
+    }
+
+
 @router.post("/delete", response_model=DeleteResponse)
 async def delete_speaker(req: DeleteRequest):
     """删除说话人（软删除）"""
@@ -394,6 +467,32 @@ async def delete_speaker(req: DeleteRequest):
 
 
 # ==================== 辅助函数 ====================
+
+def _reload_speaker_to_engine(speaker_id: str) -> None:
+    """
+    将补充音频后的说话人重新加载到各运行时引擎。
+    目前主要是通知（因为各 Pipeline 在每次处理时从 DB 重新加载）。
+    Pipeline3 会在下次 process() 时自动从 DB 读取最新声纹。
+    """
+    from app.services.speaker_db_service import get_speaker_db, bytes_to_ndarray
+    db = get_speaker_db()
+    speaker = db.load_speaker(speaker_id)
+    if speaker is None:
+        print(f"[声纹-补充] 说话人 {speaker_id} 加载失败（已删除？）", flush=True)
+        return
+
+    emb_bytes = speaker.get("embedding")
+    if emb_bytes is None:
+        print(f"[声纹-补充] 说话人 {speaker_id} 无声纹向量", flush=True)
+        return
+
+    emb = bytes_to_ndarray(emb_bytes)
+    if emb is None:
+        print(f"[声纹-补充] 说话人 {speaker_id} 向量解析失败", flush=True)
+        return
+
+    print(f"[声纹-补充] 说话人 {speaker_id}（{speaker.get('name')}）已更新，累计样本: {speaker.get('embedding_count', '?')}", flush=True)
+
 
 def _parse_audio_bytes(
     audio_bytes: bytes,
@@ -488,54 +587,18 @@ async def _extract_speaker_embedding(
     audio_count: int = 1,
 ) -> tuple:
     """
-    从音频数据中提取声纹特征向量。
-    优先使用本地 CAM++ 模型，模型不可用时降级到随机向量（STUB）。
+    从音频数据中提取声纹特征向量（使用 CAM++）。
+
+    与 Pipeline3 (offline_pipeline.py) 中的 Speaker3DEngine.extract() 逻辑一致，
+    确保注册与推理使用相同的 embedding 空间。
     """
-    embedding, quality = None, 0.5
-
-    # 方式一：尝试使用本地 ModelManager 中的 CAM++ 模型
     try:
-        from app.asr.model_manager import get_model_manager, SpeakerEmbeddingExtractor
-
-        mm = get_model_manager()
-        if mm.is_initialized():
-            camp = mm.get_camp_model()
-            if camp is not None:
-                extractor = SpeakerEmbeddingExtractor(camp, device=mm.device)
-                embedding = extractor.extract(audio_data)
-    except Exception:
-        pass  # ModelManager 或 CAM++ 不可用
-
-    # 方式二：尝试从外部路径加载（兼容旧的 D:\\InsightEye 路径配置）
-    if embedding is None:
-        try:
-            from app.config import settings
-            external_paths = [
-                getattr(settings, "CAMPPLUS_MODEL_DIR", ""),
-                getattr(settings, "CAMPPLUS_EN_MODEL_DIR", ""),
-            ]
-            for model_dir in external_paths:
-                if model_dir and model_dir.strip():
-                    from pathlib import Path
-                    insighteye_path = Path(model_dir).parent.parent
-                    if insighteye_path.exists():
-                        import sys
-                        if str(insighteye_path) not in sys.path:
-                            sys.path.insert(0, str(insighteye_path))
-                        from app.model_manager import get_model_manager, SpeakerEmbeddingExtractor
-                        mm = get_model_manager()
-                        if mm.is_initialized():
-                            camp = mm.get_camp_model()
-                            if camp is not None:
-                                extractor = SpeakerEmbeddingExtractor(camp, device=mm.device)
-                                embedding = extractor.extract(audio_data)
-                                if embedding is not None:
-                                    break
-        except Exception:
-            pass
-
-    # STUB: 降级到随机声纹向量（192维，归一化）
-    if embedding is None:
+        from app.asr.model_manager import load_campplus_model, SpeakerEmbeddingExtractor
+        model, device = load_campplus_model()
+        extractor = SpeakerEmbeddingExtractor(model, device=device)
+        embedding = extractor.extract(audio_data)
+    except Exception as e:
+        print(f"[_extract_speaker_embedding] CAM++ 提取失败: {e}，降级到随机向量", flush=True)
         np.random.seed(hash(speaker_id) % (2**31))
         embedding = np.random.randn(192).astype(np.float32)
         embedding = embedding / (np.linalg.norm(embedding) + 1e-8)

@@ -24,6 +24,7 @@ class MeetingService:
             description=data.description,
             participants=json.dumps(data.participants, ensure_ascii=False),
             status="created",
+            mode=data.mode,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )

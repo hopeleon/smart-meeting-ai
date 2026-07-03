@@ -13,13 +13,17 @@ import subprocess
 import sys
 import traceback
 import uuid
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import datetime
 from multiprocessing import get_context
+from types import SimpleNamespace
 from pathlib import Path
 
 from celery import Celery
 from app.workers.celery_app import celery_app
+
+_summary_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="summary-worker")
+_submitted_tasks: dict[str, Future] = {}
 
 
 def _get_db_path():
@@ -34,6 +38,74 @@ def _get_summaries_dir():
     return backend_dir / "summaries"
 
 
+def _run_meetingsummary_cli(
+    meetingsummary_dir: Path,
+    input_file: Path,
+    output_dir: Path,
+    prefix: str,
+    log_prefix: str,
+    extra_args: list[str] | None = None,
+) -> Path:
+    """Run meetingsummary CLI from its own directory so config.json is resolved."""
+    started_at = datetime.utcnow()
+    cmd = [
+        sys.executable,
+        "-u",
+        "-m",
+        "meetingsummary.main",
+        "-i", str(input_file),
+        "-o", str(output_dir),
+        "--prefix", prefix,
+    ]
+    if extra_args:
+        cmd.extend(extra_args)
+    print(f"[SummaryTask-subprocess] {log_prefix} 执行: {' '.join(cmd)}", flush=True)
+
+    import datetime as dt
+    import os
+
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    env["PYTHONPATH"] = os.pathsep.join([
+        str(meetingsummary_dir),
+        str(meetingsummary_dir.parent),
+        str(meetingsummary_dir.parent / "backend"),
+    ])
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        cwd=str(meetingsummary_dir),
+        env=env,
+    )
+    output_tail: list[str] = []
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        line = line.rstrip()
+        output_tail.append(line)
+        output_tail = output_tail[-120:]
+        print(f"[SummaryTask-subprocess] {log_prefix}> {line}", flush=True)
+
+    returncode = proc.wait()
+    elapsed = (datetime.utcnow() - started_at).total_seconds()
+    print(
+        f"[SummaryTask-subprocess] {log_prefix} returncode={returncode}, "
+        f"elapsed={elapsed:.1f}s",
+        flush=True,
+    )
+
+    if returncode != 0:
+        tail = "\n".join(output_tail)[-2000:]
+        raise RuntimeError(f"meetingsummary {log_prefix} 失败，returncode={returncode}: {tail}")
+
+    json_path = output_dir / f"{prefix}_{dt.date.today().strftime('%Y%m%d')}.json"
+    if not json_path.exists():
+        raise RuntimeError(f"meetingsummary {log_prefix} 未生成 JSON: {json_path}")
+    return json_path
+
+
 def _run_in_loop(coro):
     """在新建事件循环中执行 async 函数。"""
     loop = asyncio.new_event_loop()
@@ -45,6 +117,59 @@ def _run_in_loop(coro):
         asyncio.set_event_loop(None)
 
 
+def _remember_future(task_id: str, future: Future, label: str):
+    _submitted_tasks[task_id] = future
+
+    def _log_done(done: Future):
+        try:
+            done.result()
+            print(f"[SummaryTask] {label} 后台任务完成，task_id={task_id}", flush=True)
+        except Exception as exc:
+            print(f"[SummaryTask] {label} 后台任务失败，task_id={task_id}: {exc}", flush=True)
+            traceback.print_exc(file=sys.stdout)
+
+    future.add_done_callback(_log_done)
+
+
+def submit_period_summary(meeting_id: str, transcript_lines: list[dict]):
+    """Submit period summary without blocking the API process in local eager mode."""
+    task_id = str(uuid.uuid4())
+    future = _summary_executor.submit(_do_period_summary, meeting_id, transcript_lines)
+    _remember_future(task_id, future, "period")
+    return SimpleNamespace(id=task_id)
+
+
+def submit_final_summary(
+    meeting_id: str,
+    all_transcript_lines: list[dict],
+    period_summaries: list[dict] | None = None,
+):
+    """Submit final summary without blocking the API process in local eager mode."""
+    task_id = str(uuid.uuid4())
+    future = _summary_executor.submit(
+        _do_final_summary,
+        meeting_id,
+        all_transcript_lines,
+        period_summaries or [],
+    )
+    _remember_future(task_id, future, "final")
+    return SimpleNamespace(id=task_id)
+
+
+def get_submitted_summary_status(task_id: str) -> dict | None:
+    future = _submitted_tasks.get(task_id)
+    if future is None:
+        return None
+    if future.running():
+        return {"task_id": task_id, "status": "STARTED", "result": None}
+    if not future.done():
+        return {"task_id": task_id, "status": "PENDING", "result": None}
+    exc = future.exception()
+    if exc:
+        return {"task_id": task_id, "status": "FAILURE", "result": str(exc)}
+    return {"task_id": task_id, "status": "SUCCESS", "result": future.result()}
+
+
 def _do_period_summary(meeting_id: str, transcript_lines: list[dict]) -> dict:
     """
     在独立进程中执行：调用 meetingsummary CLI + 同步 SQLite 写入。
@@ -54,8 +179,7 @@ def _do_period_summary(meeting_id: str, transcript_lines: list[dict]) -> dict:
     meetingsummary_dir = Path(__file__).resolve().parents[3] / "meetingsummary"
     config_path = meetingsummary_dir / "config.json"
     if not config_path.exists():
-        print(f"[SummaryTask-subprocess] config.json 不存在: {config_path}", flush=True)
-        return {"bullet_points": [], "summary_id": None}
+        raise FileNotFoundError(f"meetingsummary config.json 不存在: {config_path}")
 
     output_dir = _get_summaries_dir() / "period"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -67,45 +191,30 @@ def _do_period_summary(meeting_id: str, transcript_lines: list[dict]) -> dict:
     input_file = output_dir / f"{prefix}_input.txt"
     input_file.write_text(transcript_text, encoding="utf-8")
 
-    cmd = [
-        sys.executable,
-        str(meetingsummary_dir / "main.py"),
-        "-i", str(input_file),
-        "-o", str(output_dir),
-        "--prefix", prefix,
-        "--no-map-reduce",
-        "--skip-completeness",
-        "--skip-eval",
-        "--skip-actions",
-    ]
-    print(f"[SummaryTask-subprocess] 执行: {' '.join(cmd)}", flush=True)
-
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180,
-                           cwd=str(meetingsummary_dir))
-    print(f"[SummaryTask-subprocess] returncode={result.returncode}", flush=True)
-    if result.stdout:
-        print(f"[SummaryTask-subprocess] stdout:\n{result.stdout[:300]}", flush=True)
-    if result.stderr:
-        print(f"[SummaryTask-subprocess] stderr:\n{result.stderr[:300]}", flush=True)
+    json_path = _run_meetingsummary_cli(
+        meetingsummary_dir,
+        input_file,
+        output_dir,
+        prefix,
+        "period",
+        ["--no-map-reduce", "--skip-eval", "--skip-completeness", "--skip-actions"],
+    )
 
     # 解析 bullet_points
-    import datetime as dt
-    json_path = output_dir / f"{prefix}_{dt.date.today().strftime('%Y%m%d')}.json"
     bullet_points = []
-    if json_path.exists():
-        try:
-            data = json.loads(json_path.read_text(encoding="utf-8"))
-            if data.get("tldr"):
-                bullet_points.append(data["tldr"])
-            for point in data.get("discussion_points", []):
-                if isinstance(point, dict):
-                    title = point.get("title", "")
-                    summary = point.get("summary", "")
-                    bullet_points.append(f"【{title}】{summary}" if summary else title)
-                elif isinstance(point, str):
-                    bullet_points.append(point)
-        except Exception as e:
-            print(f"[SummaryTask-subprocess] 解析 JSON 失败: {e}", flush=True)
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+        if data.get("tldr"):
+            bullet_points.append(data["tldr"])
+        for point in data.get("discussion_points", []):
+            if isinstance(point, dict):
+                title = point.get("title", "")
+                summary = point.get("summary", "")
+                bullet_points.append(f"【{title}】{summary}" if summary else title)
+            elif isinstance(point, str):
+                bullet_points.append(point)
+    except Exception as e:
+        raise RuntimeError(f"period 总结 JSON 解析失败: {e}") from e
 
     # 同步 SQLite 写入（避免 aiosqlite 在子进程里的锁冲突）
     period_start = min((l.get("start", 0) for l in transcript_lines), default=0)
@@ -150,8 +259,7 @@ def _do_final_summary(meeting_id: str, all_transcript_lines: list[dict],
     meetingsummary_dir = Path(__file__).resolve().parents[3] / "meetingsummary"
     config_path = meetingsummary_dir / "config.json"
     if not config_path.exists():
-        print(f"[SummaryTask-subprocess] config.json 不存在: {config_path}", flush=True)
-        return {"overview": "", "key_decisions": [], "action_items": [], "summary_id": None}
+        raise FileNotFoundError(f"meetingsummary config.json 不存在: {config_path}")
 
     output_dir = _get_summaries_dir() / "final"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -163,54 +271,43 @@ def _do_final_summary(meeting_id: str, all_transcript_lines: list[dict],
     input_file = output_dir / f"{prefix}_input.txt"
     input_file.write_text(transcript_text, encoding="utf-8")
 
-    cmd = [
-        sys.executable,
-        str(meetingsummary_dir / "main.py"),
-        "-i", str(input_file),
-        "-o", str(output_dir),
-        "--prefix", prefix,
-        "--skip-completeness",
-        "--skip-eval",
-        "--skip-actions",
-    ]
-    print(f"[SummaryTask-subprocess] final 执行: {' '.join(cmd)}", flush=True)
+    json_path = _run_meetingsummary_cli(
+        meetingsummary_dir,
+        input_file,
+        output_dir,
+        prefix,
+        "final",
+        ["--skip-eval", "--skip-completeness", "--skip-actions"],
+    )
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                           cwd=str(meetingsummary_dir))
-    print(f"[SummaryTask-subprocess] final returncode={result.returncode}", flush=True)
-    if result.stdout:
-        print(f"[SummaryTask-subprocess] stdout:\n{result.stdout[:300]}", flush=True)
-    if result.stderr:
-        print(f"[SummaryTask-subprocess] stderr:\n{result.stderr[:300]}", flush=True)
-
-    import datetime as dt
-    json_path = output_dir / f"{prefix}_{dt.date.today().strftime('%Y%m%d')}.json"
     overview = ""
     key_decisions = []
     action_items = []
 
-    if json_path.exists():
-        try:
-            data = json.loads(json_path.read_text(encoding="utf-8"))
-            overview = data.get("meeting", {}).get("summary", data.get("tldr", ""))
-            for d in data.get("decisions", []):
-                if isinstance(d, dict):
-                    key_decisions.append(d.get("description", d.get("decision", str(d))))
-                elif isinstance(d, str):
-                    key_decisions.append(d)
-            for a in data.get("action_items", []):
-                if isinstance(a, dict):
-                    action_items.append({
-                        "id": str(uuid.uuid4()),
-                        "content": a.get("task", a.get("description", a.get("content", ""))),
-                        "assignee": a.get("assignee"),
-                        "due_date": a.get("deadline", a.get("due_date")),
-                        "status": "pending",
-                    })
-                elif isinstance(a, str):
-                    action_items.append({"id": str(uuid.uuid4()), "content": a, "assignee": None, "due_date": None, "status": "pending"})
-        except Exception as e:
-            print(f"[SummaryTask-subprocess] final 解析 JSON 失败: {e}", flush=True)
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+        overview = data.get("meeting", {}).get("summary", data.get("tldr", ""))
+        for d in data.get("decisions", []):
+            if isinstance(d, dict):
+                key_decisions.append(d.get("description", d.get("decision", str(d))))
+            elif isinstance(d, str):
+                key_decisions.append(d)
+        for a in data.get("action_items", []):
+            if isinstance(a, dict):
+                action_items.append({
+                    "id": str(uuid.uuid4()),
+                    "content": a.get("task", a.get("description", a.get("content", ""))),
+                    "assignee": a.get("assignee"),
+                    "due_date": a.get("deadline", a.get("due_date")),
+                    "status": "pending",
+                })
+            elif isinstance(a, str):
+                action_items.append({"id": str(uuid.uuid4()), "content": a, "assignee": None, "due_date": None, "status": "pending"})
+    except Exception as e:
+        raise RuntimeError(f"final 总结 JSON 解析失败: {e}") from e
+
+    if not (overview or key_decisions or action_items):
+        raise RuntimeError("final 总结结果为空，拒绝写入空总结")
 
     # 同步 SQLite 写入
     summary_id = str(uuid.uuid4())
@@ -245,15 +342,13 @@ def _do_final_summary(meeting_id: str, all_transcript_lines: list[dict],
 
 
 async def _broadcast_period_summary(meeting_id: str, data: dict):
-    """通过 WebSocket 广播阶段总结。"""
-    from app.api.websocket import manager
-    await manager.send_period_summary(meeting_id, data)
+    """已弃用：离线模式下总结已存储到数据库，前端通过轮询获取。"""
+    pass
 
 
 async def _broadcast_final_summary(meeting_id: str, data: dict):
-    """通过 WebSocket 广播最终总结。"""
-    from app.api.websocket import manager
-    await manager.send_final_summary(meeting_id, data)
+    """已弃用：离线模式下总结已存储到数据库，前端通过轮询获取。"""
+    pass
 
 
 @celery_app.task(bind=True, name="summary.period_summary")
@@ -281,13 +376,8 @@ def period_summary_task(self, meeting_id: str, transcript_lines: list[dict]):
             "generated_at": generated_at,
         }
 
-        # 通过 WebSocket 推送给前端（回到主线程，可用新 loop）
-        if summary_id:
-            try:
-                _run_in_loop(_broadcast_period_summary(meeting_id, return_data))
-                print(f"[SummaryTask] period_summary 已推送 WS", flush=True)
-            except Exception as ws_err:
-                print(f"[SummaryTask] WS 推送失败: {ws_err}", flush=True)
+        # 离线模式：总结已存储到数据库，前端通过轮询获取
+        pass
 
         return return_data
     except Exception as e:
@@ -324,13 +414,8 @@ def final_summary_task(self, meeting_id: str, all_transcript_lines: list[dict],
             "generated_at": generated_at,
         }
 
-        # 通过 WebSocket 推送给前端
-        if summary_id:
-            try:
-                _run_in_loop(_broadcast_final_summary(meeting_id, return_data))
-                print(f"[SummaryTask] final_summary 已推送 WS", flush=True)
-            except Exception as ws_err:
-                print(f"[SummaryTask] final WS 推送失败: {ws_err}", flush=True)
+        # 离线模式：总结已存储到数据库，前端通过轮询获取
+        pass
 
         return return_data
     except Exception as e:

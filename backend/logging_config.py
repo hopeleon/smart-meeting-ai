@@ -16,6 +16,7 @@ from typing import Optional
 _log_file: Optional[object] = None
 _log_seq = 0
 _log_lock = threading.Lock()
+_log_initialized = False  # 防止重复初始化（但新进程会重置，所以还要检查对象类型）
 
 
 def _get_log_dir() -> Path:
@@ -42,12 +43,9 @@ class _TeeStream:
         self._orig = original
         self._file = log_file
         self._buf = ""
-        self._log_seq = 0
 
     def write(self, data: str) -> None:
-        self._orig.write(data)
-        self._orig.flush()
-
+        # 同时写到详细日志文件和原始流（→ shell 重定向 → backend.log）
         global _log_seq
         with _log_lock:
             self._buf += data
@@ -58,6 +56,9 @@ class _TeeStream:
                 ts = time.strftime("%H:%M:%S") + f".{int(time.time() * 1000) % 1000:03d}"
                 self._file.write(f"[{ts}] [#{self._log_seq:05d}] {line}\n")
                 self._file.flush()
+                # 写回原始流（shell >> 重定向 → backend.log）
+                self._orig.write(line + "\n")
+                self._orig.flush()
 
     def flush(self) -> None:
         self._orig.flush()
@@ -76,6 +77,11 @@ def setup_file_logging() -> Path:
     返回日志文件路径。
     """
     global _log_file
+
+    # 防止重复初始化：如果 stdout 已经是 _TeeStream，说明已经设置过了
+    if isinstance(sys.stdout, _TeeStream):
+        log_path = getattr(_log_file, 'name', 'unknown') if _log_file else 'unknown'
+        return Path(log_path) if isinstance(log_path, (str, Path)) else Path('unknown')
 
     log_path = _generate_log_path()
     _log_file = open(log_path, "w", encoding="utf-8")

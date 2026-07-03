@@ -1,67 +1,24 @@
-version: "3.9"
-
 services:
-  # ── 基础设施 ──────────────────────────────────────
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-meeting}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meeting123}
-      POSTGRES_DB: ${POSTGRES_DB:-meeting_platform}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-meeting}"]
-      interval: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      retries: 5
-
   # ── 后端 ──────────────────────────────────────────
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8020
     env_file: .env
     ports:
-      - "8000:8000"
+      - "8020:8020"
     volumes:
       - ./backend:/app
-      - ./backend/data:/app/data
       - ./models:/app/models:ro
       - audio_data:/app/audio_files
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  celery-worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
-    env_file: .env
-    volumes:
-      - ./backend:/app
-      - ./backend/data:/app/data
-      - ./models:/app/models:ro
-      - audio_data:/app/audio_files
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   # ── 前端 ──────────────────────────────────────────
   frontend:
@@ -69,42 +26,14 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "5173:5173"
+      - "5179:5179"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_BASE_URL=http://localhost/api
-      - VITE_WS_BASE_URL=ws://localhost/ws
-      - VITE_MOCK_MODE=true
-
-  # ── 模型服务（stub） ──────────────────────────────
-  asr-stub:
-    build:
-      context: ./model-services/asr
-      dockerfile: Dockerfile
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./model-services/asr:/app
-
-  diarization-stub:
-    build:
-      context: ./model-services/diarization
-      dockerfile: Dockerfile
-    ports:
-      - "8002:8002"
-    volumes:
-      - ./model-services/diarization:/app
-
-  llm-summary-stub:
-    build:
-      context: ./model-services/llm-summary
-      dockerfile: Dockerfile
-    ports:
-      - "8003:8003"
-    volumes:
-      - ./model-services/llm-summary:/app
+      - VITE_API_BASE_URL=http://localhost:8020/api
+      - VITE_WS_BASE_URL=ws://localhost:8020/ws
+      - VITE_MOCK_MODE=false
 
   # ── 反向代理 ──────────────────────────────────────
   nginx:
@@ -118,5 +47,4 @@ services:
       - frontend
 
 volumes:
-  pgdata:
   audio_data:

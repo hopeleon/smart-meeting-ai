@@ -8,9 +8,9 @@ import copy
 import json
 from typing import Any
 
-from config import OllamaConfig
-from json_parser import JSONExtractionError, extract_json
-from ollama_client import call_ollama
+from .config import OllamaConfig
+from .json_parser import JSONExtractionError, extract_json
+from .ollama_client import call_ollama
 
 
 def _build_verify_prompt(summary: dict[str, Any], transcript: str) -> str:
@@ -67,7 +67,7 @@ def run_verification(
     verify_system_prompt: str,
     transcript: str,
     summary: dict[str, Any],
-    timeout: int = 180,
+    timeout: int = 0,  # 0 表示无超时限制
 ) -> dict[str, Any]:
     """Run post-hoc verification and auto-correction.
 

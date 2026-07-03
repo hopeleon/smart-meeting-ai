@@ -10,9 +10,9 @@ too limited for hour-long meeting transcripts.
 from difflib import SequenceMatcher
 from typing import Any
 
-from config import OllamaConfig
-from json_parser import JSONExtractionError, extract_json
-from ollama_client import call_ollama
+from .config import OllamaConfig
+from .json_parser import JSONExtractionError, extract_json
+from .ollama_client import call_ollama
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -37,7 +37,7 @@ def run_map_phase(
     config: OllamaConfig,
     map_system_prompt: str,
     chunks: list[str],
-    timeout: int = 120,
+    timeout: int = 0,  # 0 表示无超时限制
 ) -> list[dict[str, Any]]:
     """Extract facts from each chunk via independent LLM calls.
 
@@ -186,7 +186,7 @@ def run_reduce_phase(
     config: OllamaConfig,
     summary_system_prompt: str,
     merged_facts: str,
-    timeout: int = 180,
+    timeout: int = 0,  # 0 表示无超时限制
 ) -> str:
     """Generate final summary JSON from merged, deduplicated facts.
 

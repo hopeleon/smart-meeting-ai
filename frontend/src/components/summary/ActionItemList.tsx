@@ -10,7 +10,7 @@ export default function ActionItemList({ items }: { items: ActionItem[] }) {
   return (
     <div className="space-y-3">
       {items.map((item) => {
-        const status = statusMap[item.status]
+        const status = statusMap[item.status ?? 'pending']
         return (
           <div key={item.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
             <div className="flex-1">

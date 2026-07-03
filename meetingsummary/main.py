@@ -7,27 +7,30 @@ reduce hallucination on smaller (e.g. 8B) models.
 """
 
 import argparse
+import atexit
+import subprocess
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
-from action_items import extract_action_items, write_actions_csv, write_actions_json
-from chunker import count_chinese_chars, split_transcript
-from completeness_check import run_completeness_check
-from config import load_config
-from evaluator import run_evaluation
-from file_handler import (
+from .action_items import extract_action_items, write_actions_csv, write_actions_json
+from .chunker import count_chinese_chars, split_transcript
+from .completeness_check import run_completeness_check
+from .config import load_config
+from .evaluator import run_evaluation
+from .file_handler import (
     read_transcript,
     write_completeness_report,
     write_debug_log,
     write_eval_report,
     write_output,
 )
-from json_parser import JSONExtractionError, extract_json, validate_schema
-from map_reduce import merge_deduplicate, run_map_phase, run_reduce_phase
-from markdown_generator import generate_markdown
-from ollama_client import call_ollama
-from verify import run_verification
+from .json_parser import JSONExtractionError, extract_json, validate_schema
+from .map_reduce import merge_deduplicate, run_map_phase, run_reduce_phase
+from .markdown_generator import generate_markdown
+from .ollama_client import call_ollama
+from .verify import run_verification
 
 PROMPT_PATH = Path("prompts/summary_system.txt")
 EVAL_PROMPT_PATH = Path("prompts/fact_check_system.txt")
@@ -36,6 +39,24 @@ COMPLETENESS_PROMPT_PATH = Path("prompts/completeness_system.txt")
 MAP_PROMPT_PATH = Path("prompts/map_extract_system.txt")
 VERIFY_PROMPT_PATH = Path("prompts/verify_system.txt")
 CONFIG_PATH = Path("config.json")
+
+# 供 atexit cleanup 使用
+_loaded_model_name: str | None = None
+
+
+def _cleanup_ollama(model: str | None) -> None:
+    """释放 Ollama 模型显存。在任何方式退出进程前都会执行。"""
+    if not model:
+        return
+    print(f"[Cleanup] 释放 Ollama 模型显存: ollama stop {model}", flush=True)
+    subprocess.run(["ollama", "stop", model], capture_output=True)
+    time.sleep(1)
+    result = subprocess.run(
+        ["nvidia-smi", "--query-gpu=memory.used,memory.free",
+         "--format=csv,noheader,nounits"],
+        capture_output=True, text=True
+    )
+    print(f"[Cleanup] GPU 显存已释放，当前: {result.stdout.strip()}", flush=True)
 
 DEFAULT_CHAR_THRESHOLD: int = 5000
 DEFAULT_CHUNK_SIZE: int = 15
@@ -98,6 +119,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--no-semantic-split",
         action="store_true",
         help="Force fallback to speaker-turn chunking (disable semantic split).",
+    )
+    parser.add_argument(
+        "--no-stop",
+        action="store_true",
+        help="Skip 'ollama stop' after all LLM calls (useful for debugging).",
     )
     parser.add_argument(
         "--map-reduce-threshold",
@@ -175,11 +201,18 @@ def _run_map_reduce_pipeline(
 
 
 def main() -> None:
+    global _loaded_model_name
+
     args = parse_args()
 
     # 1. Load configuration
     config = load_config(CONFIG_PATH)
     print(f"Using model: {config.model} @ {config.base_url}")
+
+    # 注册 atexit，确保任何退出方式都能释放 Ollama 模型
+    if not args.no_stop:
+        _loaded_model_name = config.model
+        atexit.register(_cleanup_ollama, _loaded_model_name)
 
     # 2. Load system prompts
     summary_prompt = PROMPT_PATH.read_text(encoding="utf-8")
@@ -211,7 +244,8 @@ def main() -> None:
             f"Debug info saved to: {debug_path}"
         )
         print("Please check the debug log and try again.")
-        sys.exit(0)
+        # 不使用 sys.exit(0)，让 atexit 清理函数正常执行
+        return
 
     # 5. Validate schema
     missing = validate_schema(summary_dict)
@@ -227,10 +261,9 @@ def main() -> None:
             verify_result = run_verification(
                 config, verify_prompt, transcript, summary_dict
             )
-        except (SystemExit, JSONExtractionError, Exception) as exc:
-            if isinstance(exc, SystemExit):
-                print("  Warning: Verification skipped — "
-                      "could not reach Ollama.")
+        except (RuntimeError, JSONExtractionError, Exception) as exc:
+            if isinstance(exc, RuntimeError):
+                print(f"  Warning: Verification skipped — {exc}")
             elif isinstance(exc, JSONExtractionError):
                 print("  Warning: Verification skipped — "
                       "verifier returned unparseable response.")
@@ -253,10 +286,9 @@ def main() -> None:
             eval_data = run_evaluation(
                 config, eval_system_prompt, transcript, summary_dict
             )
-        except (SystemExit, JSONExtractionError, Exception) as exc:
-            if isinstance(exc, SystemExit):
-                print("  Warning: Factuality evaluation skipped — "
-                      "evaluator could not reach Ollama.")
+        except (RuntimeError, JSONExtractionError, Exception) as exc:
+            if isinstance(exc, RuntimeError):
+                print(f"  Warning: Factuality evaluation skipped — {exc}")
             elif isinstance(exc, JSONExtractionError):
                 print("  Warning: Factuality evaluation skipped — "
                       "evaluator returned unparseable response.")
@@ -281,10 +313,9 @@ def main() -> None:
             action_items = extract_action_items(
                 config, action_system_prompt, transcript
             )
-        except (SystemExit, JSONExtractionError, Exception) as exc:
-            if isinstance(exc, SystemExit):
-                print("  Warning: Action-item extraction skipped — "
-                      "could not reach Ollama.")
+        except (RuntimeError, JSONExtractionError, Exception) as exc:
+            if isinstance(exc, RuntimeError):
+                print(f"  Warning: Action-item extraction skipped — {exc}")
             elif isinstance(exc, JSONExtractionError):
                 print("  Warning: Action-item extraction skipped — "
                       "unparseable response.")
@@ -303,10 +334,9 @@ def main() -> None:
             completeness_data = run_completeness_check(
                 config, completeness_system_prompt, transcript, summary_dict
             )
-        except (SystemExit, JSONExtractionError, Exception) as exc:
-            if isinstance(exc, SystemExit):
-                print("  Warning: Completeness check skipped — "
-                      "could not reach Ollama.")
+        except (RuntimeError, JSONExtractionError, Exception) as exc:
+            if isinstance(exc, RuntimeError):
+                print(f"  Warning: Completeness check skipped — {exc}")
             elif isinstance(exc, JSONExtractionError):
                 print("  Warning: Completeness check skipped — "
                       "auditor returned unparseable response.")
@@ -348,6 +378,9 @@ def main() -> None:
             args.output_dir, args.prefix, date_str, completeness_data
         )
         print(f"  Completeness:  {completeness_path}")
+
+    # atexit 会在进程退出时自动释放 Ollama 模型显存，无需手动调用
+    print("[Cleanup] 所有 LLM 调用完成，进程退出时将自动释放 Ollama 模型显存", flush=True)
 
 
 if __name__ == "__main__":

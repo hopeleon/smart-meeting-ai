@@ -6,9 +6,9 @@ transcript by calling an Ollama model as a second-pass fact-checker.
 
 from typing import Any
 
-from config import OllamaConfig
-from json_parser import JSONExtractionError, extract_json
-from ollama_client import call_ollama
+from .config import OllamaConfig
+from .json_parser import JSONExtractionError, extract_json
+from .ollama_client import call_ollama
 
 FACTUALITY_THRESHOLD: float = 95.0
 VALID_VERDICTS: frozenset[str] = frozenset({"consistent", "distorted", "hallucination"})
@@ -282,7 +282,7 @@ def run_evaluation(
     system_prompt: str,
     transcript: str,
     summary: dict[str, Any],
-    timeout: int = 120,
+    timeout: int = 0,  # 0 表示无超时限制
 ) -> dict[str, Any]:
     """Run the full factuality evaluation pipeline.
 

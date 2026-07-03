@@ -11,9 +11,10 @@ body {
 
 /* 玻璃态效果 */
 .glass {
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
 }
 
 /* 自定义滚动条 */
@@ -22,14 +23,77 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1E293B;
+  background: #F1F5F9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #CBD5E1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748B;
+  background: #94A3B8;
+}
+
+.laoji-calendar.react-calendar {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #0f172a;
+  font-family: inherit;
+}
+
+.laoji-calendar .react-calendar__navigation {
+  height: 42px;
+  margin-bottom: 12px;
+}
+
+.laoji-calendar .react-calendar__navigation button {
+  min-width: 42px;
+  border-radius: 12px;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.laoji-calendar .react-calendar__navigation button:enabled:hover,
+.laoji-calendar .react-calendar__navigation button:enabled:focus {
+  background: #e0f2fe;
+}
+
+.laoji-calendar .react-calendar__month-view__weekdays {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.laoji-calendar .react-calendar__month-view__weekdays abbr {
+  text-decoration: none;
+}
+
+.laoji-calendar .react-calendar__tile {
+  min-height: 52px;
+  border-radius: 14px;
+  color: #334155;
+}
+
+.laoji-calendar .react-calendar__tile:enabled:hover,
+.laoji-calendar .react-calendar__tile:enabled:focus {
+  background: #f0f9ff;
+}
+
+.laoji-calendar .react-calendar__tile--now {
+  background: #ecfeff;
+  color: #0e7490;
+  font-weight: 800;
+}
+
+.laoji-calendar .react-calendar__tile--active,
+.laoji-calendar .react-calendar__tile--active:enabled:hover,
+.laoji-calendar .react-calendar__tile--active:enabled:focus {
+  background: #0284c7;
+  color: white;
+}
+
+.laoji-calendar .react-calendar__month-view__days__day--neighboringMonth {
+  color: #cbd5e1;
 }

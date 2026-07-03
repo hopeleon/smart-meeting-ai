@@ -99,6 +99,17 @@ class DeleteResponse(BaseModel):
     message: str
 
 
+class SupplementResponse(BaseModel):
+    """补充声纹音频响应"""
+    success: bool
+    speaker_id: str
+    name: str
+    message: str
+    quality: float
+    total_samples: int
+    total_duration: float
+
+
 class SearchResponse(BaseModel):
     """搜索响应"""
     speakers: List[SpeakerProfile]

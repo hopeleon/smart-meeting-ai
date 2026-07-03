@@ -1,0 +1,250 @@
+{
+  "metadata": {
+    "feature": "老记",
+    "description": "一句话代办与智能日历输入输出样例",
+    "base_date": "2026-07-02",
+    "timezone": "Asia/Shanghai",
+    "notes": [
+      "样例以 2026-07-02 为当前日期。",
+      "实际 title 可能受规则解析或本地大模型解析影响略有差异。",
+      "parse_source 可为 rules、local_llm 或 clarified。",
+      "短语音转写通过 /api/laoji/asr/transcribe 完成，返回文本会先做老记唤醒词同音归一化。",
+      "老纪、老计、老季、牢记、小记等句首唤醒词会归一为老记。"
+    ]
+  },
+  "cases": [
+    {
+      "id": "laoji_once_meeting_with_description",
+      "category": "明确日期时间",
+      "input": "老记老记，下周三下午两点和周总开会，要讨论硬件相关问题",
+      "expected": {
+        "title": "周总开会",
+        "event_type": "once",
+        "start_date": "2026-07-08",
+        "start_time": "14:00",
+        "end_time": "15:00",
+        "is_all_day": false,
+        "description": "硬件相关问题",
+        "parse_source": "rules",
+        "needs_clarification": false
+      }
+    },
+    {
+      "id": "laoji_tomorrow_report",
+      "category": "提醒类事项",
+      "input": "老记老记，明天下午三点提醒我发项目周报",
+      "expected": {
+        "title": "发项目周报",
+        "event_type": "once",
+        "start_date": "2026-07-03",
+        "start_time": "15:00",
+        "end_time": "16:00",
+        "is_all_day": false,
+        "description": null,
+        "parse_source": "rules",
+        "needs_clarification": false
+      }
+    },
+    {
+      "id": "laoji_weekly_standup",
+      "category": "重复日程",
+      "input": "老记老记，每周一上午十点团队例会",
+      "expected": {
+        "title": "团队例会",
+        "event_type": "weekly",
+        "start_date": "2026-07-06",
+        "start_time": "10:00",
+        "end_time": "11:00",
+        "is_all_day": false,
+        "parse_source": "rules",
+        "needs_clarification": false
+      }
+    },
+    {
+      "id": "laoji_monthly_reimbursement",
+      "category": "每月重复",
+      "input": "老记老记，每月15号上午九点整理报销单",
+      "expected": {
+        "title": "整理报销单",
+        "event_type": "monthly",
+        "start_date": "2026-07-15",
+        "start_time": "09:00",
+        "end_time": "10:00",
+        "is_all_day": false,
+        "parse_source": "rules",
+        "needs_clarification": false
+      }
+    },
+    {
+      "id": "laoji_fuzzy_deadline",
+      "category": "模糊截止时间",
+      "input": "老记老记，月底前找财务确认报销的事",
+      "expected": {
+        "title": "找财务",
+        "event_type": "once",
+        "start_date": "2026-07-31",
+        "start_time": null,
+        "end_time": null,
+        "is_all_day": true,
+        "description": "报销的事",
+        "parse_source": "rules",
+        "needs_clarification": true,
+        "clarification_question": "没有听到具体时间，是否作为全天事项保存？"
+      },
+      "clarification": {
+        "answer": "7月25日下午三点",
+        "expected_after_clarify": {
+          "start_date": "2026-07-25",
+          "start_time": "15:00",
+          "end_time": "16:00",
+          "is_all_day": false,
+          "parse_source": "clarified",
+          "needs_clarification": false,
+          "clarification_question": null
+        }
+      }
+    },
+    {
+      "id": "laoji_wake_word_homophone",
+      "category": "唤醒词同音纠错",
+      "input": "老纪老纪月底前找财务确认报销的事。",
+      "asr_normalized": "老记老记月底前找财务确认报销的事。",
+      "expected": {
+        "title": "找财务",
+        "event_type": "once",
+        "start_date": "2026-07-31",
+        "start_time": null,
+        "end_time": null,
+        "is_all_day": true,
+        "description": "报销的事",
+        "parse_source": "rules",
+        "needs_clarification": true,
+        "clarification_question": "没有听到具体时间，是否作为全天事项保存？"
+      }
+    },
+    {
+      "id": "laoji_one_shot_asr_transcribe",
+      "category": "轻量 ASR 转写",
+      "endpoint": "POST /api/laoji/asr/transcribe",
+      "audio_input": {
+        "format": "wav",
+        "sample_rate": 16000,
+        "channels": 1,
+        "encoding": "pcm_s16le",
+        "transport": "base64"
+      },
+      "expected": {
+        "provider": "funasr",
+        "text_example": "老记老记，下周三下午两点和周总开会，要讨论硬件相关问题",
+        "post_process": [
+          "去除首尾空白",
+          "归一化老记同音唤醒词",
+          "写入主输入框或追问补充框"
+        ]
+      }
+    },
+    {
+      "id": "laoji_all_day_confirm",
+      "category": "全天确认",
+      "input": "老记老记，7月31日找财务确认报销",
+      "expected": {
+        "title": "找财务确认报销",
+        "event_type": "once",
+        "start_date": "2026-07-31",
+        "start_time": null,
+        "end_time": null,
+        "is_all_day": true,
+        "needs_clarification": true
+      },
+      "clarification": {
+        "answer": "就按7月31日全天",
+        "expected_after_clarify": {
+          "start_date": "2026-07-31",
+          "start_time": null,
+          "end_time": null,
+          "is_all_day": true,
+          "parse_source": "clarified",
+          "needs_clarification": false
+        }
+      }
+    },
+    {
+      "id": "laoji_conflict_reference",
+      "category": "冲突提示",
+      "preexisting_events": [
+        {
+          "title": "项目周会",
+          "start_date": "2026-07-08",
+          "start_time": "14:00",
+          "end_time": "15:00",
+          "is_all_day": false
+        }
+      ],
+      "input": "老记老记，下周三下午两点和周总开会",
+      "expected": {
+        "start_date": "2026-07-08",
+        "start_time": "14:00",
+        "end_time": "15:00",
+        "conflict_hint": true,
+        "conflict_message": "这个时间附近已有安排"
+      }
+    },
+    {
+      "id": "laoji_voice_clarification_flow",
+      "category": "语音补充流程",
+      "steps": [
+        {
+          "action": "record_command",
+          "spoken": "老记老记，月底前找财务确认报销的事",
+          "target": "主输入框",
+          "asr_mode": "one_shot_funasr"
+        },
+        {
+          "action": "parse",
+          "result": "进入需确认状态"
+        },
+        {
+          "action": "record_clarification",
+          "spoken": "7月25日下午三点",
+          "target": "追问补充框",
+          "asr_mode": "one_shot_funasr"
+        },
+        {
+          "action": "apply_clarification",
+          "expected": {
+            "start_date": "2026-07-25",
+            "start_time": "15:00",
+            "end_time": "16:00",
+            "needs_clarification": false
+          }
+        }
+      ]
+    }
+  ],
+  "future_cases": [
+    {
+      "id": "laoji_reminder_time_split",
+      "status": "planned",
+      "input": "下周五前交材料，提前一天提醒我",
+      "target_capability": "区分截止时间、提醒时间和事件本身"
+    },
+    {
+      "id": "laoji_multi_slot_dialogue",
+      "status": "planned",
+      "input": "找个时间和周总聊硬件预算",
+      "target_capability": "多轮追问日期、时间、参与人、地点"
+    },
+    {
+      "id": "laoji_hotword_bias",
+      "status": "planned",
+      "input": "老记老记，周总下午聊硬件预算",
+      "target_capability": "为老记、周总、硬件、财务、报销等词加入 ASR 热词或解析偏置"
+    },
+    {
+      "id": "laoji_external_calendar_sync",
+      "status": "planned",
+      "input": "保存后同步到企业日历",
+      "target_capability": "ICS、CalDAV、飞书、企业微信或 Outlook 同步"
+    }
+  ]
+}

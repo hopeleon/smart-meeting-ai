@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>企业实时语音识别三模式评估报告</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --paper: #ffffff;
+      --text: #20242a;
+      --muted: #5f6b7a;
+      --line: #d9dee7;
+      --brand: #2563eb;
+      --ok: #0f766e;
+      --warn: #b45309;
+      --bad: #b91c1c;
+      --code: #f1f5f9;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    article {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 32px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      line-height: 1.2;
+    }
+    h2 {
+      margin-top: 34px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+    }
+    h3 {
+      margin-top: 24px;
+      font-size: 18px;
+    }
+    p.meta {
+      margin: 0;
+      color: var(--muted);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 22px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: #eef2f7;
+      font-weight: 700;
+    }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: var(--code);
+      border-radius: 6px;
+    }
+    code {
+      padding: 2px 5px;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow: auto;
+      padding: 14px;
+      border: 1px solid var(--line);
+    }
+    .summary {
+      border-left: 4px solid var(--brand);
+      background: #eff6ff;
+      padding: 14px 18px;
+      margin: 18px 0 24px;
+    }
+    .ok { color: var(--ok); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    .bad { color: var(--bad); font-weight: 700; }
+    ul, ol {
+      padding-left: 22px;
+    }
+    @media (max-width: 720px) {
+      article { padding: 22px 16px; }
+      table { display: block; overflow-x: auto; white-space: nowrap; }
+    }
+  </style>
+</head>
+<body>
+<main>
+<article>
+  <h1>企业实时语音识别三模式评估报告</h1>
+  <p class="meta">评估日期：2026-07-02</p>
+  <p class="meta">项目目录：<code>/home/zhong/SMART-MEETING2 (copy)(lx)/smart-meeting-ai</code></p>
+  <p class="meta">评估对象：FunASR、Whisper、Qwen 三种实时 WebSocket 模式</p>
+
+  <h2>1. 结论摘要</h2>
+  <div class="summary">
+    当前系统已经具备企业实时 ASR 对接的基本协议形态：WebSocket 长连接、二进制 PCM 推流、逐句 JSON 返回、会话 ID 隔离、三种识别模式入口。但从本轮环境启动和仓库既有评测结果看，距离企业稳定交付还差一层工程化收敛。
+  </div>
+  <ul>
+    <li><strong>协议方向正确</strong>：<code>/ws/meeting/{id}/funasr</code>、<code>/whisper</code>、<code>/qwen</code> 三种端点已与企业实时推流方式对齐。</li>
+    <li><strong>当前本地环境不可直接完成三模式在线验收</strong>：本轮启动中 FunASR ASR 模型加载失败，Qwen-ASR 微服务因无 CUDA 失败，健康检查无法稳定访问 <code>8020/8030</code>。</li>
+    <li><strong>历史客观评测显示</strong>：在 6 场合成中文会议上，Whisper 文本 CER 最低，Qwen 综合更稳，FunASR 说话人过分割最明显。</li>
+    <li><strong>企业推荐路线</strong>：优先把 <strong>Qwen 模式</strong> 打磨成默认推荐模式；保留 Whisper 作为高准确率/离线增强方案；FunASR 作为低延迟和中文抗噪备选。</li>
+  </ul>
+
+  <h2>2. 本轮实测环境结果</h2>
+  <h3>2.1 启动方式</h3>
+  <pre><code>cd "/home/zhong/SMART-MEETING2 (copy)(lx)/smart-meeting-ai"
+bash start-local.sh</code></pre>
+  <p>脚本尝试启动后端 <code>8020</code>、前端 <code>5179</code>、Qwen-ASR <code>8030</code> 和 Ollama。</p>
+
+  <h3>2.2 健康检查</h3>
+  <table>
+    <thead><tr><th>服务</th><th>检查地址</th><th>结果</th></tr></thead>
+    <tbody>
+      <tr><td>Backend</td><td><code>http://127.0.0.1:8020/api/health</code></td><td class="bad">连接失败</td></tr>
+      <tr><td>Qwen-ASR</td><td><code>http://127.0.0.1:8030/health</code></td><td class="bad">连接失败</td></tr>
+    </tbody>
+  </table>
+  <p>备注：后端日志出现过 <code>Uvicorn running on http://0.0.0.0:8020</code>，但在当前工具沙箱下外部命令无法稳定访问该端口，<code>ps</code> 也未能看到 uvicorn 进程。因此本轮没有把三路在线转写结果标为成功实测。</p>
+
+  <h3>2.3 模型加载状态</h3>
+  <table>
+    <thead><tr><th>模型/组件</th><th>状态</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>Silero VAD</td><td class="ok">PASS</td><td>语音活动检测可加载</td></tr>
+      <tr><td>FunASR ASR</td><td class="bad">FAIL</td><td><code>FunASR ASR 加载失败（模型为空）</code></td></tr>
+      <tr><td>标点恢复 ct-punc</td><td class="warn">SKIP/FAIL</td><td>尝试从 ModelScope 下载，受代理/网络限制失败</td></tr>
+      <tr><td>CAM++ 中文声纹</td><td class="ok">PASS</td><td>先尝试 CUDA 失败，再退回 CPU</td></tr>
+      <tr><td>CAM++ 英文声纹</td><td class="ok">PASS</td><td>可选，先尝试 CUDA 失败，再退回 CPU</td></tr>
+      <tr><td>WhisperLiveKit</td><td class="warn">后台预加载</td><td>日志显示开始预加载，但未完成可用性验证</td></tr>
+      <tr><td>Qwen-ASR 微服务</td><td class="bad">FAIL</td><td><code>RuntimeError: No CUDA GPUs are available</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. 仓库既有客观评测结果</h2>
+  <p>仓库中已有 <code>test_meetings/评测报告.md</code>、<code>test_meetings/评测结果.json</code> 和三模式转写文本。测试数据来自 Primewords 中文语料，合成 6 场约 20 分钟、每场 5 位说话人的中文会议。</p>
+
+  <h3>3.1 平均结果</h3>
+  <table>
+    <thead><tr><th>模式</th><th>平均 CER ↓</th><th>检测说话人数</th><th>结论</th></tr></thead>
+    <tbody>
+      <tr><td>Whisper</td><td><strong>27.2%</strong></td><td>未统一统计</td><td>文本准确率最好，但该结果来自 faster-whisper 批量转写，偏上界</td></tr>
+      <tr><td>Qwen</td><td>30.3%</td><td>7.0</td><td>综合表现稳定，建议作为企业实时默认推荐</td></tr>
+      <tr><td>FunASR</td><td>32.1%</td><td>9.7</td><td>文本略弱，且说话人过分割明显</td></tr>
+      <tr><td>Whisper + pyannote</td><td>文本同 Whisper</td><td><strong>5.3</strong></td><td>说话人数量最接近真值 5</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.2 逐场结果</h3>
+  <table>
+    <thead><tr><th>会议</th><th>CER·Qwen</th><th>CER·FunASR</th><th>CER·Whisper</th><th>说话人·Qwen</th><th>说话人·FunASR</th><th>说话人·pyannote</th></tr></thead>
+    <tbody>
+      <tr><td>meeting_1</td><td>0.297</td><td>0.324</td><td><strong>0.239</strong></td><td>5</td><td>8</td><td>7</td></tr>
+      <tr><td>meeting_2</td><td>0.350</td><td>0.370</td><td><strong>0.326</strong></td><td>6</td><td>10</td><td>5</td></tr>
+      <tr><td>meeting_3</td><td><strong>0.244</strong></td><td>0.256</td><td>0.278</td><td>9</td><td>12</td><td>4</td></tr>
+      <tr><td>meeting_4</td><td>0.338</td><td>0.356</td><td><strong>0.248</strong></td><td>8</td><td>7</td><td>6</td></tr>
+      <tr><td>meeting_5</td><td>0.297</td><td>0.312</td><td><strong>0.276</strong></td><td>7</td><td>15</td><td>6</td></tr>
+      <tr><td>meeting_6</td><td>0.291</td><td>0.309</td><td><strong>0.263</strong></td><td>7</td><td>6</td><td>4</td></tr>
+      <tr><td>平均</td><td>0.303</td><td>0.321</td><td><strong>0.272</strong></td><td>7.0</td><td>9.7</td><td>5.3</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.3 模式解读</h3>
+  <p><strong>Qwen</strong>：中文实时综合表现最均衡，文本 CER 比 FunASR 低，说话人聚类比 FunASR 少过分割。短板是强依赖独立 Qwen-ASR 微服务和 CUDA。本轮环境无 GPU，因此不可用。建议作为企业默认主链路。</p>
+  <p><strong>Whisper</strong>：历史评测中文本 CER 最低；配合 pyannote 时，说话人数量最接近真值。短板是该 CER 是批量上界，不等同实时流式表现，真实会议中还需处理繁体、方言标签、静音幻觉。</p>
+  <p><strong>FunASR</strong>：中文专用、低延迟潜力好，适合资源较轻场景。但本轮模型未成功加载，历史评测中过分割最明显。</p>
+
+  <h2>4. 与企业实时对接标准的差距</h2>
+  <h3>4.1 已满足或基本满足</h3>
+  <table>
+    <thead><tr><th>企业要求</th><th>当前状态</th></tr></thead>
+    <tbody>
+      <tr><td>实时 WebSocket 推流</td><td>已有三种端点</td></tr>
+      <tr><td>会话隔离</td><td>使用 <code>{meeting_id}</code></td></tr>
+      <tr><td>二进制 PCM 推流</td><td>企业文档已明确</td></tr>
+      <tr><td>逐句 JSON 返回</td><td><code>transcript.completed</code> 已统一</td></tr>
+      <tr><td>说话人字段</td><td>已有 <code>speaker_id</code>、<code>speaker_name</code>、<code>identified</code>、<code>best_guess_name</code></td></tr>
+      <tr><td>Python SDK</td><td><code>sdk/asr_client.py</code> 已提供</td></tr>
+      <tr><td>文档</td><td><code>docs/实时语音识别接口-企业对接说明.md</code> 已存在</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.2 需要补齐</h3>
+  <table>
+    <thead><tr><th>差距</th><th>影响</th><th>优先级</th></tr></thead>
+    <tbody>
+      <tr><td>模型启动不稳定</td><td>企业现场无法验收</td><td>P0</td></tr>
+      <tr><td>缺少统一健康检查和 readiness</td><td>无法判断三模式是否可用</td><td>P0</td></tr>
+      <tr><td>Qwen 强依赖 CUDA，未提供 CPU/降级策略</td><td>无 GPU 时模式直接不可用</td><td>P0</td></tr>
+      <tr><td>FunASR 依赖/模型注册失败</td><td>FunASR 模式不可用</td><td>P0</td></tr>
+      <tr><td>缺少 WSS + Token 鉴权</td><td>企业公网/专线接入风险高</td><td>P0</td></tr>
+      <tr><td>错误码和错误事件不统一</td><td>企业侧难以自动重连/告警</td><td>P1</td></tr>
+      <tr><td>缺少并发压测数据</td><td>无法承诺容量</td><td>P1</td></tr>
+      <tr><td>缺少端到端延迟指标</td><td>无法量化实时</td><td>P1</td></tr>
+      <tr><td>说话人 DER 未测</td><td>分离质量无法严肃承诺</td><td>P1</td></tr>
+      <tr><td>日志、音频、转写数据混放</td><td>运维和合规风险</td><td>P1</td></tr>
+      <tr><td>大量 <code>.bak</code> 和运行产物混入源码</td><td>维护成本高</td><td>P2</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. 优化路线建议</h2>
+  <h3>5.1 P0：先让企业验收链路稳定可跑</h3>
+  <ol>
+    <li>修复启动脚本端口检测：用 HTTP 轮询 <code>/api/health</code> 和 WebSocket 轻量握手替代 <code>ss</code>。</li>
+    <li>增加统一 readiness：建议新增 <code>GET /api/asr/modes</code> 和 <code>GET /api/asr/health</code>。</li>
+    <li>修复 Qwen 启动失败：启动前检查 CUDA/显存，无 GPU 时返回结构化 unavailable。</li>
+    <li>修复 FunASR 模型加载：固定本地模型路径，禁止生产启动时自动联网下载。</li>
+    <li>补企业鉴权和 WSS：支持 Token、会话限流、最大连接时长。</li>
+  </ol>
+
+  <h3>5.2 P1：建立可交付质量指标</h3>
+  <ol>
+    <li>编写三模式统一测试脚本，输出首包延迟、最终延迟、断连次数、错误事件。</li>
+    <li>增加真实会议测试集：噪声、混响、抢话、远场麦克风、电话窄带、口音。</li>
+    <li>补 DER 和身份识别准确率。</li>
+    <li>做 1/5/10/20 路并发压测。</li>
+    <li>统一错误协议，例如 <code>MODEL_UNAVAILABLE</code>、<code>BAD_AUDIO_FORMAT</code>、<code>SESSION_LIMIT_EXCEEDED</code>。</li>
+  </ol>
+
+  <h3>5.3 P2：整理项目结构</h3>
+  <pre><code>smart-meeting-ai/
+├── backend/
+├── frontend/
+├── meetingsummary/
+├── smart_meeting_app/
+├── docs/
+├── deploy/
+├── sdk/
+├── data/       # 测试集/语料/样本，不进 git
+├── runtime/    # 日志、音频、总结、local.db，不进 git
+└── archive/    # old-version 和 bak 文件</code></pre>
+  <p>可直接清理生成物：<code>__pycache__/</code>、<code>.pytest_cache/</code>、<code>frontend/dist/</code>、<code>frontend/node_modules/</code>、<code>smart_meeting_app/.dart_tool/</code>。</p>
+  <p>建议归档而非直接删除：<code>old-version/</code>、<code>*.bak*</code>、历史日志、历史总结输出。</p>
+
+  <h2>6. 企业交付建议</h2>
+  <table>
+    <thead><tr><th>场景</th><th>推荐模式</th></tr></thead>
+    <tbody>
+      <tr><td>企业实时会议默认</td><td>Qwen</td></tr>
+      <tr><td>追求最高文本准确率</td><td>Whisper</td></tr>
+      <tr><td>轻量低延迟中文场景</td><td>FunASR</td></tr>
+      <tr><td>说话人分离优先</td><td>Whisper + pyannote 或 Qwen + 调优后 CAM++</td></tr>
+    </tbody>
+  </table>
+  <p>上线前最低验收门槛：三模式健康检查明确、Qwen 连续 60 分钟、单路 P95 最终句延迟小于 5 秒、5 路并发 30 分钟无断连、WSS/Token 可用、模型不可用时返回结构化错误。</p>
+
+  <h2>7. 本轮整理动作</h2>
+  <p>本轮新增：</p>
+  <ul>
+    <li><code>docs/reports/enterprise-realtime-asr-evaluation-2026-07-02.md</code></li>
+    <li><code>docs/reports/enterprise-realtime-asr-evaluation-2026-07-02.html</code></li>
+  </ul>
+  <p>本轮没有删除大型数据和历史输出。原因是当前目录是运行现场快照，大文件中包含测试集、模型、历史评测和日志，直接删除会影响复现。建议下一步先做归档迁移，再删除确认无用的产物。</p>
+
+  <h2>8. 下一步建议</h2>
+  <ol>
+    <li>修复启动和健康检查，让本地环境可稳定访问 <code>8020/8030</code>。</li>
+    <li>修复 Qwen CUDA 检测和 FunASR 模型加载。</li>
+    <li>写三模式统一自动化测试脚本，生成机器可复现报告。</li>
+    <li>补 WSS、Token、错误码、并发压测。</li>
+    <li>做目录归档：<code>data/</code>、<code>runtime/</code>、<code>archive/</code>。</li>
+  </ol>
+</article>
+</main>
+</body>
+</html>

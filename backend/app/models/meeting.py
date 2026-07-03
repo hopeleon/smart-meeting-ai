@@ -14,6 +14,7 @@ class Meeting(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="created")
+    mode: Mapped[str] = mapped_column(String(20), default="realtime")  # "realtime" | "offline"
     participants: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

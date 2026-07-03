@@ -20,3 +20,14 @@ export async function getFinalSummary(meetingId: string): Promise<FinalSummary |
     throw err
   }
 }
+
+export async function downloadSummaryDocument(meetingId: string): Promise<{ blob: Blob; filename: string }> {
+  const resp = await apiClient.get(`/meetings/${meetingId}/downloads/summary`, {
+    responseType: 'blob',
+  })
+  const disposition = resp.headers['content-disposition'] as string | undefined
+  const match = disposition?.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/)
+  const rawName = match?.[1] || match?.[2] || `meeting-${meetingId}-summary.md`
+  const filename = decodeURIComponent(rawName)
+  return { blob: resp.data, filename }
+}

@@ -1,5 +1,5 @@
 """
-增强版声纹识别引擎 v2 — 对齐 D:\InsightEye\app\enhanced_speaker_recognition_v2.py
+增强版声纹识别引擎 v2 — 对齐 InsightEye
 专门针对多人场景的大规模说话人识别
 
 核心改进：
@@ -355,7 +355,7 @@ class EnhancedRecognitionEngine:
         top_k: int = 3,
         method: RecognitionMethod = RecognitionMethod.FUSION,
         extractor_en: Optional[SpeakerEmbeddingExtractor] = None,
-        track_id: Optional[str] = None,
+        track_id: Optional[int] = None,
     ) -> EnhancedIdentificationResult:
         if not self.enrolled_speakers:
             return EnhancedIdentificationResult(

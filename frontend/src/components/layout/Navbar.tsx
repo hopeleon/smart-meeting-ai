@@ -9,15 +9,24 @@ export default function Navbar() {
         className="flex items-center gap-3 cursor-pointer"
         onClick={() => navigate('/')}
       >
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-bold text-sm">
+        <div className="w-8 h-8 bg-sky-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
           M
         </div>
-        <span className="font-semibold">智能会议记录</span>
+        <span className="font-semibold text-slate-900">智能会议记录</span>
       </div>
       <div className="flex items-center gap-4 text-sm">
         <button
+          onClick={() => navigate('/laoji')}
+          className="text-slate-500 hover:text-sky-700 transition flex items-center gap-1.5"
+        >
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          老记
+        </button>
+        <button
           onClick={() => navigate('/speakers')}
-          className="text-gray-400 hover:text-indigo-400 transition flex items-center gap-1.5"
+          className="text-slate-500 hover:text-sky-700 transition flex items-center gap-1.5"
         >
           <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -27,7 +36,7 @@ export default function Navbar() {
           </svg>
           声纹管理
         </button>
-        <span className="text-gray-400">v0.1.0</span>
+        <span className="text-slate-400">v0.1.0</span>
       </div>
     </nav>
   )
